@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Global Spatial Data Visualization</title>
+    <title>Global Spatial Data Visualization - Pro Edition</title>
     
     <script src="https://unpkg.com/three@0.147.0/build/three.min.js"></script>
     <script src="https://unpkg.com/globe.gl"></script>
@@ -53,11 +53,11 @@
         <div class="group">
             <label id="l-rotate">空间旋转角速度 (ω)</label>
             <select id="rSpeed" onchange="setRotation()">
+                <option value="0" id="opt-rOff" selected>锁定视角 (ω=0) - 默认</option>
                 <option value="4.0" id="opt-r15">15秒/转 (高频演示模式)</option>
                 <option value="2.0" id="opt-r30">30秒/转 (标准模式)</option>
                 <option value="1.0" id="opt-r60">60秒/转 (平滑分析模式)</option>
                 <option value="0.000694" id="opt-rDay">真实地球同步自转</option>
-                <option value="0" id="opt-rOff">锁定视角 (ω=0)</option>
             </select>
         </div>
 
@@ -80,44 +80,42 @@
             zh: { 
                 title: "地理空间智能分析系统", search: "空间定位检索 (IATA / 省名)", file: "导入高通量轨迹阵列 (.csv)", view: "多维度图层控制", rotate: "空间旋转角速度 (ω)",
                 all: "全维度渲染 (轨迹 + 核心枢纽)", arc: "仅拓扑连线 (Arcs Only)", hub: "仅热力散点 (Hubs Only)",
-                r15: "15秒/转 (高频演示模式)", r30: "30秒/转 (标准模式)", r60: "60秒/转 (平滑分析模式)", rDay: "真实地球同步自转", rOff: "锁定视角 (ω=0)",
+                r15: "15秒/转 (高频演示模式)", r30: "30秒/转 (标准模式)", r60: "60秒/转 (平滑分析模式)", rDay: "真实地球同步自转", rOff: "锁定视角 (ω=0) - 默认",
                 notfound: "目标坐标系未命中" 
             },
             en: { 
                 title: "Spatial Data Analysis System", search: "Spatial Locate (IATA / Prov)", file: "Import Trajectory Array (.csv)", view: "Multi-dimensional Layers", rotate: "Angular Velocity (ω)",
                 all: "Full Dimensions (Arcs + Hubs)", arc: "Topology Arcs Only", hub: "Heatmap Scatter Only",
-                r15: "15s/rev (High-freq)", r30: "30s/rev (Standard)", r60: "60s/rev (Smooth)", rDay: "Real Earth Sync", rOff: "Lock View (ω=0)",
+                r15: "15s/rev (High-freq)", r30: "30s/rev (Standard)", r60: "60s/rev (Smooth)", rDay: "Real Earth Sync", rOff: "Lock View (ω=0) - Default",
                 notfound: "Target coordinates unmapped" 
             }
         };
 
         // ==========================================
-        // 1. 初始化 WebGL 三维渲染管线 (拆解链式调用以确保安全)
+        // 1. 初始化 WebGL 三维渲染管线 (整合权重渲染逻辑)
         // ==========================================
         const world = Globe()(document.getElementById('globeViz'));
 
-        // 基础贴图与视角
         world.globeImageUrl('./earth-dark.jpg') 
-             .bumpImageUrl('./earth-topology.jpg')
+             .bumpImageUrl('./earth-topology.jpg') // 确保读取本地的 .jpg
              .pointOfView({ alt: 2.5 });
 
-        // 轨迹属性配置
-        world.arcColor(() => '#00ff88')
+        // 【新功能】：根据数据权重(流量)动态调整轨迹的粗细与颜色，降低显卡压力
+        world.arcColor(d => d.weight > 100 ? '#ff0055' : '#00ff88')
+             .arcStroke(d => Math.min(d.weight * 0.05, 2.0))
              .arcDashLength(0.4)
              .arcDashGap(0.2)
              .arcDashAnimateTime(2000);
 
-        // 散点热力柱属性配置
-        world.pointAltitude(d => Math.min(d.v * 0.01, 0.5))
-             .pointColor(() => '#ffff00')
+        // 【新功能】：根据总流量动态调整热力柱的高度与高亮颜色
+        world.pointAltitude(d => Math.min(d.v * 0.005, 0.8))
+             .pointColor(d => d.v > 500 ? '#ff3300' : '#ffff00')
              .pointRadius(0.5);
 
-        // 多边形省界属性配置
         world.polygonCapColor(() => 'rgba(0, 255, 136, 0.05)')
              .polygonStrokeColor(() => '#444')
              .polygonLabel(d => `<b>${lang==='zh'?(d.properties.name_zh||d.properties.name):d.properties.name}</b>`);
 
-        // 城市标签属性配置
         world.labelLat(d => d.lt)
              .labelLng(d => d.lg)
              .labelText(d => d.iata)
@@ -127,17 +125,15 @@
         window.addEventListener('resize', () => { world.width(window.innerWidth).height(window.innerHeight); });
 
         // ==========================================
-        // 2. 异步并行加载管线
+        // 2. 异步加载基础地图数据
         // ==========================================
         async function init() {
             const stats = document.getElementById('stats');
             
-            // 加载机场数据
             Papa.parse("./optimized_airports.csv", {
                 download: true, header: true, skipEmptyLines: true,
                 error: (err) => { 
-                    stats.innerHTML = `<span style="color:red">错误: optimized_airports.csv 读取失败。<br>请检查文件名或文件是否存在。</span>`; 
-                    console.error(err);
+                    stats.innerHTML = `<span style="color:red">错误: optimized_airports.csv 读取失败。</span>`; 
                 },
                 complete: r => {
                     r.data.forEach(x => { 
@@ -153,7 +149,6 @@
                 }
             });
 
-            // 加载省界数据
             fetch("./provinces.json")
                 .then(res => { if(!res.ok) throw new Error("JSON Fetch Failed"); return res.json(); })
                 .then(tj => {
@@ -164,8 +159,7 @@
                     upd(); 
                 })
                 .catch(e => { 
-                    stats.innerHTML = `<span style="color:red">错误: provinces.json 加载失败。<br>请确认文件存在且格式正确。</span>`; 
-                    console.error(e);
+                    stats.innerHTML = `<span style="color:red">错误: provinces.json 加载失败。</span>`; 
                 });
         }
 
@@ -192,20 +186,46 @@
             } else alert(i18n[lang].notfound);
         }
 
+        // 【核心修改】：支持读取经过 Python 压缩后的带有 'weight' (权重) 的 CSV 数据
         document.getElementById('fIn').onchange = e => {
             if (!e.target.files[0]) return;
-            Papa.parse(e.target.files[0], { header: true, complete: r => {
-                const counts = {};
-                arcs = r.data.map(x => {
-                    const s = db[(x.origin||'').trim().toUpperCase()], d = db[(x.dest||'').trim().toUpperCase()];
-                    if (s && d) {
-                        [x.origin, x.dest].forEach(i => { const c = i.trim().toUpperCase(); counts[c] = (counts[c]||0) + 1; });
-                        return { startLat: s.lt, startLng: s.lg, endLat: d.lt, endLng: d.lg };
-                    }
-                }).filter(x => x);
-                hubs = Object.entries(counts).map(([k, v]) => ({ ...db[k], iata: k, v }));
-                renderLayers();
-            }});
+            
+            document.getElementById('stats').innerHTML = "<span style='color:#00ff88'>正在通过 GPU 渲染轨迹网络...</span>";
+            
+            Papa.parse(e.target.files[0], { 
+                header: true, 
+                dynamicTyping: true, // 确保读取到的 weight 是数字
+                complete: r => {
+                    arcs = [];
+                    const hubMap = {}; 
+                    
+                    r.data.forEach(x => {
+                        const s = db[(x.origin||'').trim().toUpperCase()];
+                        const d = db[(x.dest||'').trim().toUpperCase()];
+                        
+                        if (s && d) {
+                            // 兼容旧数据和 Python 压缩后的新数据
+                            const w = x.weight ? x.weight : 1; 
+                            
+                            arcs.push({ 
+                                startLat: s.lt, startLng: s.lg, 
+                                endLat: d.lt, endLng: d.lg,
+                                weight: w // 注入权重属性供引擎渲染使用
+                            });
+
+                            [x.origin, x.dest].forEach(i => { 
+                                const c = i.trim().toUpperCase(); 
+                                hubMap[c] = (hubMap[c] || 0) + w; 
+                            });
+                        }
+                    });
+
+                    hubs = Object.entries(hubMap).map(([k, v]) => ({ ...db[k], iata: k, v }));
+                    renderLayers();
+                    
+                    document.getElementById('stats').innerText = `渲染完成: 成功绘制了 ${arcs.length} 条独立航线。`;
+                }
+            });
         };
 
         function renderLayers() {
@@ -213,7 +233,11 @@
             world.arcsData(v==='hub'?[]:arcs).pointsData(v==='arc'?[]:hubs);
         }
 
-        function clearAll() { world.arcsData([]).pointsData([]); document.getElementById('fIn').value=''; }
+        function clearAll() { 
+            world.arcsData([]).pointsData([]); 
+            document.getElementById('fIn').value=''; 
+            document.getElementById('stats').innerText = "数据已清除。";
+        }
 
         function exportSnapshot() {
             world.renderer().render(world.scene(), world.camera());
@@ -243,7 +267,7 @@
         // ==========================================
         world.onZoom(upd);
         init();
-        setRotation(); 
+        setRotation(); // 初始化时会读取下拉菜单的默认值（此时为 0，即静止）
     </script>
 </body>
 </html>
