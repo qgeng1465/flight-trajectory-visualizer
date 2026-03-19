@@ -1,192 +1,138 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>全球航班与地理数据分析系统 - 研究员版</title>
-  
-  <script src="https://unpkg.com/three"></script>
-  <script src="https://unpkg.com/globe.gl"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-
-  <style>
-    body { margin: 0; padding: 0; overflow: hidden; background-color: #050505; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
-    #ui-panel {
-      position: absolute; top: 20px; left: 20px; z-index: 10;
-      background: rgba(15, 15, 15, 0.9); padding: 20px; border-radius: 8px;
-      color: #eee; border: 1px solid #333; backdrop-filter: blur(10px); width: 320px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    }
-    .control-group { margin-bottom: 15px; }
-    label { display: block; margin-bottom: 6px; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px;}
-    select, input, button {
-      box-sizing: border-box; width: 100%; background: #222; color: #fff; 
-      border: 1px solid #444; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 13px;
-    }
-    button:hover { background: #333; border-color: #00ff88; }
-    h3 { margin-top: 0; font-size: 16px; border-bottom: 1px solid #333; padding-bottom: 10px; color: #00ff88; }
-    #stats { margin-top: 15px; font-size: 12px; color: #ffb86c; font-family: monospace; line-height: 1.6; }
-    .lang-btn-group { display: flex; gap: 5px; }
-    .active-lang { border-color: #00ff88 !important; color: #00ff88 !important; }
-    .loader { color: #00ff88; font-style: italic; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Global Geo-Analysis System Pro</title>
+    <script src="https://unpkg.com/three"></script>
+    <script src="https://unpkg.com/globe.gl"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://unpkg.com/topojson-client"></script>
+    <style>
+        body { margin: 0; background: #000; color: #eee; font-family: system-ui; overflow: hidden; }
+        #ui { position: absolute; top: 15px; left: 15px; z-index: 10; background: rgba(10,10,10,0.85); padding: 18px; border-radius: 12px; width: 290px; border: 1px solid #333; backdrop-filter: blur(8px); }
+        h3 { margin: 0 0 12px; color: #00ff88; font-size: 16px; border-bottom: 1px solid #222; padding-bottom: 8px; }
+        .group { margin-bottom: 12px; }
+        label { display: block; font-size: 10px; color: #777; margin-bottom: 4px; text-transform: uppercase; }
+        input, select, button { width: 100%; background: #1a1a1a; color: #fff; border: 1px solid #333; padding: 8px; border-radius: 6px; font-size: 13px; box-sizing: border-box; }
+        button { cursor: pointer; transition: 0.2s; background: #222; }
+        button:hover { border-color: #00ff88; background: #2a2a2a; }
+        #stats { font-size: 11px; color: #ffb86c; margin-top: 10px; font-family: monospace; }
+        .flex { display: flex; gap: 4px; margin-bottom: 8px; }
+        .active { border-color: #00ff88; color: #00ff88; }
+    </style>
 </head>
 <body>
-
-  <div id="ui-panel">
-    <h3 id="ui-title">系统控制中心</h3>
-    
-    <div class="control-group">
-      <label id="label-lang">系统语言 / Language</label>
-      <div class="lang-btn-group">
-        <button id="btn-zh" class="active-lang" onclick="switchLang('zh')">中文模式</button>
-        <button id="btn-en" onclick="switchLang('en')">English</button>
-      </div>
-    </div>
-
-    <div class="control-group">
-      <label id="label-file">导入轨迹数据 (CSV/Excel)</label>
-      <input type="file" id="fileInput" accept=".csv" />
-    </div>
-
-    <div class="control-group">
-      <label id="label-mode">轨迹动画模式</label>
-      <select id="animToggle">
-        <option value="dynamic">动态飞行 (Dynamic)</option>
-        <option value="static">静态路径 (Static)</option>
-      </select>
-    </div>
-
-    <button id="clearBtn" style="color: #ff5555; border-color: #622;">清除所有数据</button>
-    
-    <div id="stats"><span class="loader">正在加载本地数据库...</span></div>
-  </div>
-
-  <div id="globeViz"></div>
-
-  <script>
-    // --- 国际化配置 ---
-    const i18n = {
-      zh: { title: "全球数据分析系统", lang: "系统语言", file: "导入轨迹数据 (CSV)", mode: "轨迹动画模式", clear: "清除所有数据", alt: "高度", nodes: "节点", prov: "省界", active: "已激活", hidden: "远景隐藏" },
-      en: { title: "Global Intelligence", lang: "System Language", file: "Import Flight Data", mode: "Animation Mode", clear: "Clear All Data", alt: "Altitude", nodes: "Nodes", prov: "Borders", active: "Active", hidden: "Hidden" }
-    };
-
-    let currentLang = 'zh';
-    let airportDB = {}, geoLabelData = [], flightData = [], provinceData = [];
-
-    // --- 初始化 WebGL 地球 ---
-    const globe = Globe()(document.getElementById('globeViz'))
-      .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg')
-      .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
-      .pointOfView({ alt: 2.5 })
-      .arcColor(() => '#00ff88')
-      .arcDashLength(0.4).arcDashGap(0.2).arcDashAnimateTime(2000)
-      .polygonSideColor(() => 'rgba(0,0,0,0)')
-      .polygonCapColor(() => 'rgba(0, 255, 136, 0.04)')
-      .polygonStrokeColor(() => '#444')
-      .polygonStrokeWidth(0.5)
-      .polygonLabel(d => `
-        <div style="padding:8px; background:rgba(0,0,0,0.9); border:1px solid #00ff88; color:#fff;">
-          <b>${currentLang === 'zh' ? (d.properties.name_zh || d.properties.name) : (d.properties.name || d.properties.name_en)}</b><br/>
-          <span style="font-size:11px; color:#aaa;">Country: ${d.properties.adm0_name}</span>
+    <div id="ui">
+        <h3 id="t-title">地理智能分析系统</h3>
+        <div class="flex">
+            <button id="b-zh" class="active" onclick="switchLang('zh')">中文</button>
+            <button id="b-en" onclick="switchLang('en')">EN</button>
         </div>
-      `);
+        <div class="group">
+            <label id="l-search">定位查询 (IATA / 省名)</label>
+            <input type="text" id="src" placeholder="PEK / Guangdong..." onkeydown="if(e=event,e.keyCode==13)find()">
+        </div>
+        <div class="group">
+            <label id="l-file">数据导入 (.csv)</label>
+            <input type="file" id="fIn" accept=".csv">
+        </div>
+        <div class="group">
+            <select id="vMode">
+                <option value="all">全部显示 (All)</option>
+                <option value="arc">仅轨迹 (Arcs)</option>
+                <option value="hub">仅热力 (Hubs)</option>
+            </select>
+        </div>
+        <button onclick="clearAll()" style="color:#ff5555;font-size:11px">清除全部数据</button>
+        <div id="stats">系统加载中...</div>
+    </div>
+    <div id="globe"></div>
 
-    // --- 语言切换逻辑 ---
-    function switchLang(lang) {
-      currentLang = lang;
-      const dict = i18n[lang];
-      document.getElementById('ui-title').innerText = dict.title;
-      document.getElementById('label-lang').innerText = dict.lang;
-      document.getElementById('label-file').innerText = dict.file;
-      document.getElementById('label-mode').innerText = dict.mode;
-      document.getElementById('clearBtn').innerText = dict.clear;
-      document.getElementById('btn-zh').className = (lang === 'zh' ? 'active-lang' : '');
-      document.getElementById('btn-en').className = (lang === 'en' ? 'active-lang' : '');
-      updateLOD(); // 刷新地图标签语言
-    }
+    <script>
+        const i18n = {
+            zh: { title: "地理智能分析系统", search: "定位查询 (IATA / 省名)", file: "数据导入 (.csv)", ready: "就绪", loading: "同步中...", error: "未找到目标" },
+            en: { title: "Geo-Intelligence Sys", search: "Locate (IATA / Prov)", file: "Import Data (.csv)", ready: "Ready", loading: "Syncing...", error: "Not Found" }
+        };
 
-    // --- 核心：按需加载与性能控制 (LOD) ---
-    function updateLOD() {
-      const { alt } = globe.pointOfView();
-      const statsEl = document.getElementById('stats');
-      
-      // 1. 省界逻辑：放大到 1.5 倍以下才渲染复杂的 Polygon 几何体
-      if (alt < 1.6 && provinceData.length > 0) {
-        globe.polygonsData(provinceData);
-      } else {
-        globe.polygonsData([]);
-      }
+        let db = {}, provs = [], arcs = [], hubs = [], lang = 'zh';
 
-      // 2. 标签抽样：高空只看主要枢纽，低空全量显示
-      const sampledLabels = alt < 1.3 ? geoLabelData : geoLabelData.filter((_, i) => i % 25 === 0);
-      globe.labelsData(sampledLabels)
-        .labelText(d => currentLang === 'zh' ? d.zh : d.en)
-        .labelSize(alt * 0.15)
-        .labelDotRadius(0.08);
+        // 初始化渲染器
+        const world = Globe()(document.getElementById('globe'))
+            .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg')
+            .pointOfView({ alt: 2.5 })
+            .arcColor(() => '#00ff88').arcDashLength(0.4).arcDashGap(0.2).arcDashAnimateTime(2000)
+            .pointColor(() => '#ffff00').pointRadius(0.5).pointAltitude(d => Math.min(d.v * 0.01, 0.5))
+            .polygonCapColor(() => 'rgba(0, 255, 136, 0.05)').polygonStrokeColor(() => '#444')
+            .polygonLabel(d => `<b>${lang==='zh'?(d.properties.name_zh||d.properties.name):d.properties.name}</b>`);
 
-      // 3. 更新统计
-      const dict = i18n[currentLang];
-      statsEl.innerHTML = `
-        ${dict.alt}: ${alt.toFixed(2)} | ${dict.nodes}: ${sampledLabels.length}<br>
-        ${dict.prov}: ${alt < 1.6 ? dict.active : dict.hidden}
-      `;
-    }
-
-    // --- 本地文件异步读取 ---
-    async function loadLocalResources() {
-      // 读取机场 CSV
-      Papa.parse("./airports.csv", {
-        download: true, header: true, skipEmptyLines: true,
-        complete: (res) => {
-          res.data.forEach(r => {
-            if (r.iata_code && (r.type.includes('airport'))) {
-              const iata = r.iata_code.toUpperCase();
-              const entry = { iata, zh: r.municipality || r.name, en: r.name, lat: +r.latitude_deg, lng: +r.longitude_deg };
-              airportDB[iata] = entry;
-              geoLabelData.push(entry);
-            }
-          });
-          updateLOD();
+        // 核心定位功能
+        function find() {
+            const q = document.getElementById('src').value.trim().toUpperCase();
+            if (db[q]) return world.pointOfView({ lat: db[q].lt, lng: db[q].lg, alt: 0.8 }, 1500);
+            const p = provs.find(x => (x.properties.name||'').toUpperCase()===q || (x.properties.name_zh||'').toUpperCase()===q);
+            if (p) {
+                const c = p.geometry.coordinates[0][0];
+                world.pointOfView({ lat: Array.isArray(c[0])?c[0][1]:c[1], lng: Array.isArray(c[0])?c[0][0]:c[0], alt: 1.2 }, 1500);
+            } else alert(i18n[lang].error);
         }
-      });
 
-      // 读取省界 JSON
-      fetch("./provinces.json")
-        .then(res => res.json())
-        .then(data => { 
-          provinceData = data.features;
-          console.log("Province data synced.");
-        })
-        .catch(err => console.error("JSON Error: 请检查 provinces.json 是否在同一目录并启动了本地服务器"));
-    }
+        // 高效数据加载
+        async function init() {
+            Papa.parse("./airports.csv", { download: true, header: true, complete: r => {
+                r.data.forEach(x => { if(x.iata_code) db[x.iata_code.toUpperCase()] = { n: x.name, lt: +x.latitude_deg, lg: +x.longitude_deg }; });
+            }});
+            try {
+                const r = await fetch("./provinces.json");
+                const tj = await r.json();
+                provs = topojson.feature(tj, tj.objects.ne_10m_admin_1_states_provinces).features;
+                upd();
+            } catch(e) { document.getElementById('stats').innerText="Error loading JSON"; }
+        }
 
-    // --- 交互监听 ---
-    globe.onZoom(updateLOD);
+        function upd() {
+            const { alt } = world.pointOfView();
+            world.polygonsData(alt < 1.6 ? provs : []);
+            document.getElementById('stats').innerText = `${i18n[lang].ready} | Alt: ${alt.toFixed(2)}`;
+        }
 
-    document.getElementById('fileInput').onchange = (e) => {
-      const file = e.target.files[0];
-      Papa.parse(file, { header: true, complete: (res) => {
-        const enriched = res.data.map(r => {
-          const s = airportDB[String(r.origin || '').toUpperCase().trim()];
-          const e = airportDB[String(r.dest || '').toUpperCase().trim()];
-          return s && e ? { startLat: s.lat, startLng: s.lng, endLat: e.lat, endLng: e.lng } : null;
-        }).filter(x => x);
-        flightData = [...flightData, ...enriched];
-        globe.arcsData(flightData);
-      }});
-    };
+        function switchLang(l) {
+            lang = l;
+            ['zh', 'en'].forEach(k => document.getElementById(`b-${k}`).className = l===k?'active':'');
+            document.getElementById('t-title').innerText = i18n[l].title;
+            document.getElementById('l-search').innerText = i18n[l].search;
+            document.getElementById('l-file').innerText = i18n[l].file;
+            world.polygonLabel(world.polygonLabel());
+        }
 
-    document.getElementById('animToggle').onchange = (e) => {
-      const isDyn = e.target.value === 'dynamic';
-      globe.arcDashLength(isDyn ? 0.4 : 1).arcDashAnimateTime(isDyn ? 2000 : 0);
-    };
+        document.getElementById('fIn').onchange = e => {
+            Papa.parse(e.target.files[0], { header: true, complete: r => {
+                const counts = {};
+                arcs = r.data.map(x => {
+                    const s = db[(x.origin||'').toUpperCase()], d = db[(x.dest||'').toUpperCase()];
+                    if (s && d) {
+                        [x.origin, x.dest].forEach(i => {
+                            const c = i.toUpperCase();
+                            counts[c] = (counts[c]||0) + 1;
+                        });
+                        return { startLat: s.lt, startLng: s.lg, endLat: d.lt, endLng: d.lg };
+                    }
+                }).filter(x => x);
+                hubs = Object.entries(counts).map(([k, v]) => ({ ...db[k], iata: k, v }));
+                renderLayers();
+            }});
+        };
 
-    document.getElementById('clearBtn').onclick = () => { flightData = []; globe.arcsData([]); };
+        function renderLayers() {
+            const v = document.getElementById('vMode').value;
+            world.arcsData(v==='hub'?[]:arcs).pointsData(v==='arc'?[]:hubs);
+        }
 
-    // 启动系统
-    loadLocalResources();
-    switchLang('zh');
-  </script>
+        function clearAll() { world.arcsData([]).pointsData([]); document.getElementById('fIn').value=''; }
+
+        document.getElementById('vMode').onchange = renderLayers;
+        world.onZoom(upd);
+        init();
+        switchLang('zh');
+    </script>
 </body>
 </html>
