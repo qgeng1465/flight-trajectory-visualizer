@@ -1,267 +1,192 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Global Flight Tracker - Full Database Edition</title>
+  <title>全球航班与地理数据分析系统 - 研究员版</title>
   
   <script src="https://unpkg.com/three"></script>
   <script src="https://unpkg.com/globe.gl"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <style>
-    body { margin: 0; padding: 0; overflow: hidden; background-color: #050505; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { margin: 0; padding: 0; overflow: hidden; background-color: #050505; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
     #ui-panel {
       position: absolute; top: 20px; left: 20px; z-index: 10;
       background: rgba(15, 15, 15, 0.9); padding: 20px; border-radius: 8px;
-      color: #eee; border: 1px solid #333; backdrop-filter: blur(10px); width: 340px;
+      color: #eee; border: 1px solid #333; backdrop-filter: blur(10px); width: 320px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
     .control-group { margin-bottom: 15px; }
-    label { display: block; margin-bottom: 6px; font-size: 12px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px;}
-    input[type="file"], select, button {
+    label { display: block; margin-bottom: 6px; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px;}
+    select, input, button {
       box-sizing: border-box; width: 100%; background: #222; color: #fff; 
-      border: 1px solid #444; padding: 8px 10px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: 0.2s;
+      border: 1px solid #444; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 13px;
     }
-    button { background: #333; margin-top: 5px; }
-    button:hover, select:hover { background: #444; }
+    button:hover { background: #333; border-color: #00ff88; }
     h3 { margin-top: 0; font-size: 16px; border-bottom: 1px solid #333; padding-bottom: 10px; color: #00ff88; }
-    #stats { margin-top: 15px; font-size: 12px; color: #ffb86c; font-family: monospace; line-height: 1.5; }
-    .loader { display: inline-block; width: 12px; height: 12px; border: 2px solid #ffb86c; border-bottom-color: transparent; border-radius: 50%; animation: rotation 1s linear infinite; vertical-align: middle; margin-right: 5px; }
-    @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    #stats { margin-top: 15px; font-size: 12px; color: #ffb86c; font-family: monospace; line-height: 1.6; }
+    .lang-btn-group { display: flex; gap: 5px; }
+    .active-lang { border-color: #00ff88 !important; color: #00ff88 !important; }
+    .loader { color: #00ff88; font-style: italic; }
   </style>
 </head>
 <body>
+
   <div id="ui-panel">
-    <h3>Data & Visualization Control</h3>
+    <h3 id="ui-title">系统控制中心</h3>
     
     <div class="control-group">
-      <label>1. Import Trajectory Data (CSV/Excel)</label>
-      <input type="file" id="fileInput" accept=".csv, .xlsx, .xls, .json" disabled />
+      <label id="label-lang">系统语言 / Language</label>
+      <div class="lang-btn-group">
+        <button id="btn-zh" class="active-lang" onclick="switchLang('zh')">中文模式</button>
+        <button id="btn-en" onclick="switchLang('en')">English</button>
+      </div>
     </div>
 
     <div class="control-group">
-      <label>2. Trajectory Display Mode</label>
+      <label id="label-file">导入轨迹数据 (CSV/Excel)</label>
+      <input type="file" id="fileInput" accept=".csv" />
+    </div>
+
+    <div class="control-group">
+      <label id="label-mode">轨迹动画模式</label>
       <select id="animToggle">
-        <option value="dynamic">Dynamic Animation (动态飞行)</option>
-        <option value="static">Static Lines (静态连线)</option>
+        <option value="dynamic">动态飞行 (Dynamic)</option>
+        <option value="static">静态路径 (Static)</option>
       </select>
     </div>
 
-    <div class="control-group">
-      <label>3. Global Geo-Labels</label>
-      <select id="langToggle">
-        <option value="none">Hidden (隐藏以确保极限性能)</option>
-        <option value="zh">Chinese (中文映射优先)</option>
-        <option value="en">English (全球全量显示)</option>
-      </select>
-    </div>
-
-    <div class="control-group" style="border-top: 1px solid #333; padding-top: 15px;">
-      <button id="clearBtn" style="color: #ff5555; border-color: #662222;">Clear All Trajectories</button>
-    </div>
-
-    <div id="stats"><span class="loader" id="loaderIcon"></span>Initializing Core Engine...</div>
+    <button id="clearBtn" style="color: #ff5555; border-color: #622;">清除所有数据</button>
+    
+    <div id="stats"><span class="loader">正在加载本地数据库...</span></div>
   </div>
 
   <div id="globeViz"></div>
 
   <script>
-    // ==========================================
-    // 系统核心状态与双语翻译层 (System State & Translation Layer)
-    // ==========================================
-    let airportDB = {}; 
-    let geoLabelData = [];
-    let flightData = []; 
-    let isDynamic = true;
-    let labelLang = 'none';
-
-    // 核心中英文字典：覆盖中国及全球高频节点
-    const zhDict = {
-      "PEK": "北京首都", "PKX": "北京大兴", "PVG": "上海浦东", "SHA": "上海虹桥", "CAN": "广州白云", "SZX": "深圳宝安",
-      "HKG": "香港", "MFM": "澳门", "TPE": "台北桃园", "CTU": "成都双流", "TFU": "成都天府", "CKG": "重庆江北",
-      "XIY": "西安咸阳", "WUH": "武汉天河", "NKG": "南京禄口", "HGH": "杭州萧山", "CSX": "长沙黄花", "KMG": "昆明长水",
-      "CGO": "郑州新郑", "URC": "乌鲁木齐", "HRB": "哈尔滨太平", "SHE": "沈阳桃仙", "TAO": "青岛胶东", "XMN": "厦门高崎",
-      "JFK": "纽约肯尼迪", "LAX": "洛杉矶", "SFO": "旧金山", "ORD": "芝加哥", "LHR": "伦敦希思罗", "CDG": "巴黎戴高乐",
-      "FRA": "法兰克福", "HND": "东京羽田", "NRT": "东京成田", "ICN": "首尔仁川", "SIN": "新加坡", "DXB": "迪拜",
-      "SYD": "悉尼", "MEL": "墨尔本", "YVR": "温哥华", "YYZ": "多伦多", "DME": "莫斯科多莫杰多沃", "SVO": "莫斯科谢列梅捷沃"
+    // --- 国际化配置 ---
+    const i18n = {
+      zh: { title: "全球数据分析系统", lang: "系统语言", file: "导入轨迹数据 (CSV)", mode: "轨迹动画模式", clear: "清除所有数据", alt: "高度", nodes: "节点", prov: "省界", active: "已激活", hidden: "远景隐藏" },
+      en: { title: "Global Intelligence", lang: "System Language", file: "Import Flight Data", mode: "Animation Mode", clear: "Clear All Data", alt: "Altitude", nodes: "Nodes", prov: "Borders", active: "Active", hidden: "Hidden" }
     };
 
-    // ==========================================
-    // 全量空间数据动态加载管道 (Remote Data Ingestion Pipeline)
-    // ==========================================
-    const REMOTE_DB_URL = "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/airports.csv";
+    let currentLang = 'zh';
+    let airportDB = {}, geoLabelData = [], flightData = [], provinceData = [];
 
-    const loadGlobalDatabase = () => {
-      const statsEl = document.getElementById('stats');
-      statsEl.innerHTML = '<span class="loader"></span>Fetching 3000+ Global Nodes...';
-
-      Papa.parse(REMOTE_DB_URL, {
-        download: true,
-        header: true,
-        skipEmptyLines: true,
-        complete: function(results) {
-          let nodeCount = 0;
-          results.data.forEach(row => {
-            // 严谨过滤：仅保留中大型民用机场，过滤直升机坪和废弃机场
-            if (row.iata_code && (row.type === 'large_airport' || row.type === 'medium_airport')) {
-              const iata = String(row.iata_code).toUpperCase();
-              const enName = row.municipality || row.name;
-              
-              airportDB[iata] = {
-                en: enName,
-                zh: zhDict[iata] || enName, // 若命中字典则用中文，否则回退至英文
-                coords: [parseFloat(row.latitude_deg), parseFloat(row.longitude_deg)]
-              };
-              nodeCount++;
-            }
-          });
-
-          // 预编译为数组结构，供 WebGL 渲染
-          geoLabelData = Object.keys(airportDB).map(iata => ({
-            iata: iata,
-            en: airportDB[iata].en,
-            zh: airportDB[iata].zh,
-            lat: airportDB[iata].coords[0],
-            lng: airportDB[iata].coords[1]
-          }));
-
-          statsEl.innerHTML = `System Ready.<br>Database nodes: <span style="color:#00ff88">${nodeCount}</span><br>Active Trajectories: 0`;
-          statsEl.style.color = '#fff';
-          document.getElementById('fileInput').disabled = false; // 解锁上传
-          
-          updateLabels();
-        },
-        error: function(err) {
-          statsEl.innerHTML = '<span style="color:red">Failed to fetch database. Check network.</span>';
-        }
-      });
-    };
-
-    // ==========================================
-    // WebGL 3D 地球初始化与渲染管线
-    // ==========================================
-    const globe = Globe()
-      (document.getElementById('globeViz'))
+    // --- 初始化 WebGL 地球 ---
+    const globe = Globe()(document.getElementById('globeViz'))
       .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg')
       .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
-      
-      // 航线属性
-      .arcLabel(d => `${d.flight_id} | ${d.origin} ✈ ${d.dest}`)
-      .arcStartLat(d => d.startLat)
-      .arcStartLng(d => d.startLng)
-      .arcEndLat(d => d.endLat)
-      .arcEndLng(d => d.endLng)
+      .pointOfView({ alt: 2.5 })
       .arcColor(() => '#00ff88')
-      .arcStroke(() => 1.2)
-      
-      // 全量地名标签属性
-      .labelLat(d => d.lat)
-      .labelLng(d => d.lng)
-      .labelSize(0.4)
-      .labelDotRadius(0.15)
-      .labelColor(() => 'rgba(255, 255, 255, 0.7)')
-      .labelResolution(2);
+      .arcDashLength(0.4).arcDashGap(0.2).arcDashAnimateTime(2000)
+      .polygonSideColor(() => 'rgba(0,0,0,0)')
+      .polygonCapColor(() => 'rgba(0, 255, 136, 0.04)')
+      .polygonStrokeColor(() => '#444')
+      .polygonStrokeWidth(0.5)
+      .polygonLabel(d => `
+        <div style="padding:8px; background:rgba(0,0,0,0.9); border:1px solid #00ff88; color:#fff;">
+          <b>${currentLang === 'zh' ? (d.properties.name_zh || d.properties.name) : (d.properties.name || d.properties.name_en)}</b><br/>
+          <span style="font-size:11px; color:#aaa;">Country: ${d.properties.adm0_name}</span>
+        </div>
+      `);
 
-    // ==========================================
-    // 渲染更新逻辑 (Render Updaters)
-    // ==========================================
-    const updateArcs = () => {
-      globe.arcDashLength(isDynamic ? 0.4 : 1)
-           .arcDashGap(isDynamic ? 0.2 : 0)
-           .arcDashAnimateTime(isDynamic ? 2000 : 0)
-           .arcsData([...flightData]);
-           
+    // --- 语言切换逻辑 ---
+    function switchLang(lang) {
+      currentLang = lang;
+      const dict = i18n[lang];
+      document.getElementById('ui-title').innerText = dict.title;
+      document.getElementById('label-lang').innerText = dict.lang;
+      document.getElementById('label-file').innerText = dict.file;
+      document.getElementById('label-mode').innerText = dict.mode;
+      document.getElementById('clearBtn').innerText = dict.clear;
+      document.getElementById('btn-zh').className = (lang === 'zh' ? 'active-lang' : '');
+      document.getElementById('btn-en').className = (lang === 'en' ? 'active-lang' : '');
+      updateLOD(); // 刷新地图标签语言
+    }
+
+    // --- 核心：按需加载与性能控制 (LOD) ---
+    function updateLOD() {
+      const { alt } = globe.pointOfView();
       const statsEl = document.getElementById('stats');
-      if (statsEl.innerHTML.includes('System Ready')) {
-        statsEl.innerHTML = `System Ready.<br>Database nodes: <span style="color:#00ff88">${geoLabelData.length}</span><br>Active Trajectories: ${flightData.length}`;
-      }
-    };
-
-    const updateLabels = () => {
-      if (labelLang === 'none') {
-        globe.labelsData([]);
+      
+      // 1. 省界逻辑：放大到 1.5 倍以下才渲染复杂的 Polygon 几何体
+      if (alt < 1.6 && provinceData.length > 0) {
+        globe.polygonsData(provinceData);
       } else {
-        const localizedLabels = geoLabelData.map(d => ({
-          ...d,
-          text: labelLang === 'zh' ? d.zh : d.en
-        }));
-        globe.labelsData(localizedLabels).labelText(d => d.text);
+        globe.polygonsData([]);
       }
-    };
 
-    // ==========================================
-    // 数据融合引擎 (Data Enrichment)
-    // ==========================================
-    const processImportedData = (rawDataArray) => {
-      const enriched = [];
-      rawDataArray.forEach(row => {
-        const origin = String(row['origin'] || row['起飞机场'] || '').toUpperCase().trim();
-        const dest = String(row['dest'] || row['降落机场'] || '').toUpperCase().trim();
-        const flight_id = row['flight_id'] || row['航班号'] || 'Unknown';
+      // 2. 标签抽样：高空只看主要枢纽，低空全量显示
+      const sampledLabels = alt < 1.3 ? geoLabelData : geoLabelData.filter((_, i) => i % 25 === 0);
+      globe.labelsData(sampledLabels)
+        .labelText(d => currentLang === 'zh' ? d.zh : d.en)
+        .labelSize(alt * 0.15)
+        .labelDotRadius(0.08);
 
-        if (airportDB[origin] && airportDB[dest]) {
-          enriched.push({
-            flight_id: flight_id,
-            origin: origin,
-            dest: dest,
-            startLat: airportDB[origin].coords[0],
-            startLng: airportDB[origin].coords[1],
-            endLat: airportDB[dest].coords[0],
-            endLng: airportDB[dest].coords[1]
+      // 3. 更新统计
+      const dict = i18n[currentLang];
+      statsEl.innerHTML = `
+        ${dict.alt}: ${alt.toFixed(2)} | ${dict.nodes}: ${sampledLabels.length}<br>
+        ${dict.prov}: ${alt < 1.6 ? dict.active : dict.hidden}
+      `;
+    }
+
+    // --- 本地文件异步读取 ---
+    async function loadLocalResources() {
+      // 读取机场 CSV
+      Papa.parse("./airports.csv", {
+        download: true, header: true, skipEmptyLines: true,
+        complete: (res) => {
+          res.data.forEach(r => {
+            if (r.iata_code && (r.type.includes('airport'))) {
+              const iata = r.iata_code.toUpperCase();
+              const entry = { iata, zh: r.municipality || r.name, en: r.name, lat: +r.latitude_deg, lng: +r.longitude_deg };
+              airportDB[iata] = entry;
+              geoLabelData.push(entry);
+            }
           });
+          updateLOD();
         }
       });
 
-      if (enriched.length === 0) {
-        alert("Parse Alert: 未匹配到有效航线。请检查 IATA 字段是否标准。");
-        return;
-      }
-      flightData = [...flightData, ...enriched];
-      updateArcs();
+      // 读取省界 JSON
+      fetch("./provinces.json")
+        .then(res => res.json())
+        .then(data => { 
+          provinceData = data.features;
+          console.log("Province data synced.");
+        })
+        .catch(err => console.error("JSON Error: 请检查 provinces.json 是否在同一目录并启动了本地服务器"));
+    }
+
+    // --- 交互监听 ---
+    globe.onZoom(updateLOD);
+
+    document.getElementById('fileInput').onchange = (e) => {
+      const file = e.target.files[0];
+      Papa.parse(file, { header: true, complete: (res) => {
+        const enriched = res.data.map(r => {
+          const s = airportDB[String(r.origin || '').toUpperCase().trim()];
+          const e = airportDB[String(r.dest || '').toUpperCase().trim()];
+          return s && e ? { startLat: s.lat, startLng: s.lng, endLat: e.lat, endLng: e.lng } : null;
+        }).filter(x => x);
+        flightData = [...flightData, ...enriched];
+        globe.arcsData(flightData);
+      }});
     };
 
-    // ==========================================
-    // UI 事件监听器 (Event Listeners)
-    // ==========================================
-    document.getElementById('animToggle').addEventListener('change', (e) => {
-      isDynamic = e.target.value === 'dynamic';
-      updateArcs();
-    });
+    document.getElementById('animToggle').onchange = (e) => {
+      const isDyn = e.target.value === 'dynamic';
+      globe.arcDashLength(isDyn ? 0.4 : 1).arcDashAnimateTime(isDyn ? 2000 : 0);
+    };
 
-    document.getElementById('langToggle').addEventListener('change', (e) => {
-      labelLang = e.target.value;
-      updateLabels();
-    });
+    document.getElementById('clearBtn').onclick = () => { flightData = []; globe.arcsData([]); };
 
-    document.getElementById('fileInput').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const ext = file.name.split('.').pop().toLowerCase();
-      if (ext === 'csv') {
-        Papa.parse(file, { header: true, skipEmptyLines: true, complete: res => processImportedData(res.data) });
-      } else if (ext === 'xlsx' || ext === 'xls') {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const workbook = XLSX.read(new Uint8Array(event.target.result), { type: 'array' });
-          const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
-          processImportedData(json);
-        };
-        reader.readAsArrayBuffer(file);
-      }
-      e.target.value = ''; 
-    });
-
-    document.getElementById('clearBtn').addEventListener('click', () => {
-      flightData = [];
-      updateArcs();
-    });
-
-    // 启动系统级数据拉取
-    loadGlobalDatabase();
-
+    // 启动系统
+    loadLocalResources();
+    switchLang('zh');
   </script>
 </body>
 </html>
