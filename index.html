@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Global Flight Trajectory Visualizer</title>
+  
+  <script src="https://unpkg.com/three"></script>
+  <script src="https://unpkg.com/globe.gl"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    body { margin: 0; padding: 0; overflow: hidden; background-color: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    #ui-panel {
+      position: absolute; top: 20px; left: 20px; z-index: 10;
+      background: rgba(20, 20, 20, 0.9); padding: 20px; border-radius: 8px;
+      color: #fff; border: 1px solid #444; backdrop-filter: blur(10px); width: 300px;
+    }
+    .control-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 8px; font-size: 13px; color: #aaa; }
+    input[type="file"], button {
+      box-sizing: border-box; width: 100%; background: #2b2b2b; color: #fff; 
+      border: 1px solid #555; padding: 8px 12px; border-radius: 4px; cursor: pointer;
+    }
+    button:hover { background: #444; }
+    h3 { margin-top: 0; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 10px; }
+    #stats { margin-top: 15px; font-size: 12px; color: #00ff88; }
+  </style>
+</head>
+<body>
+  <div id="ui-panel">
+    <h3>Flight Data Control</h3>
+    <div class="control-group">
+      <label>1. Import Data (CSV / Excel / JSON)</label>
+      <input type="file" id="fileInput" accept=".json, .csv, .xlsx, .xls" />
+    </div>
+    <div class="control-group">
+      <label>2. Export Current State</label>
+      <button id="exportBtn">Download Rendered Data (JSON)</button>
+    </div>
+    <div class="control-group">
+      <label>3. System Reset</label>
+      <button id="clearBtn" style="border-color: #8b0000; color: #ff6b6b;">Clear Local Storage</button>
+    </div>
+    <div id="stats">Active Trajectories: 0</div>
+  </div>
+
+  <div id="globeViz"></div>
+
+  <script>
+    // System State
+    let airportDB = {}; 
+    let flightData = []; 
+
+    // Initialize 3D WebGL Globe
+    const globe = Globe()
+      (document.getElementById('globeViz'))
+      .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg')
+      .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+      .arcLabel(d => `${d.flight_id} | ${d.origin} ✈ ${d.dest}`)
+      .arcStartLat(d => d.startLat)
+      .arcStartLng(d => d.startLng)
+      .arcEndLat(d => d.endLat)
+      .arcEndLng(d => d.endLng)
+      .arcColor(() => '#00ff88')
+      .arcDashLength(0.4)
+      .arcDashGap(0.2)
+      .arcDashAnimateTime(2000)
+      .arcsData([]);
+
+    // UI Updater
+    const updateStats = () => {
+      document.getElementById('stats').innerText = `Active Trajectories: ${flightData.length}`;
+    };
+
+    // Geocoding & Data Enrichment
+    const enrichFlightData = (rawFlights) => {
+      const enriched = [];
+      let errorCount = 0;
+
+      rawFlights.forEach(flight => {
+        const originCoords = airportDB[flight.origin];
+        const destCoords = airportDB[flight.dest];
+
+        if (originCoords && destCoords) {
+          enriched.push({
+            ...flight,
+            startLat: originCoords[0],
+            startLng: originCoords[1],
+            endLat: destCoords[0],
+            endLng: destCoords[1]
+          });
+        } else {
+          console.warn(`[Missing Geodata] Origin: ${flight.origin}, Dest: ${flight.dest}`);
+          errorCount++;
+        }
+      });
+
+      if (errorCount > 0) alert(`Warning: ${errorCount} records skipped due to missing IATA coordinates.`);
+      return enriched;
+    };
+
+    // Data Pipeline Router
+    const processImportedData = (rawDataArray) => {
+      const normalizedData = rawDataArray.map(row => ({
+        flight_id: row['flight_id'] || row['航班号'] || row['Flight'],
+        origin: String(row['origin'] || row['起飞机场'] || row['Origin']).toUpperCase(),
+        dest: String(row['dest'] || row['降落机场'] || row['Destination']).toUpperCase(),
+        time: row['time'] || row['时间'] || new Date().toISOString()
+      })).filter(row => row.flight_id && row.origin && row.dest); 
+
+      if (normalizedData.length === 0) {
+        alert('Parse Error: Missing required headers (flight_id, origin, dest).');
+        return;
+      }
+
+      const newEnrichedFlights = enrichFlightData(normalizedData);
+      flightData = [...flightData, ...newEnrichedFlights];
+      
+      localStorage.setItem('flightTrajectories', JSON.stringify(flightData));
+      globe.arcsData(flightData);
+      updateStats();
+    };
+
+    // Event Listeners: File Input
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const fileName = file.name.toLowerCase();
+      
+      if (fileName.endsWith('.json')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try { processImportedData(JSON.parse(event.target.result)); } 
+          catch (err) { alert('Invalid JSON format.'); }
+        };
+        reader.readAsText(file);
+      } 
+      else if (fileName.endsWith('.csv')) {
+        Papa.parse(file, {
+          header: true, skipEmptyLines: true,
+          complete: (results) => processImportedData(results.data),
+          error: (err) => alert(`CSV Error: ${err.message}`)
+        });
+      } 
+      else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const workbook = XLSX.read(new Uint8Array(event.target.result), { type: 'array' });
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+            processImportedData(jsonData);
+          } catch (err) { alert('Excel Parse Error. Ensure file is not corrupted.'); }
+        };
+        reader.readAsArrayBuffer(file);
+      }
+
+      e.target.value = ''; 
+    });
+
+    // Event Listeners: Export & Clear
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      if(flightData.length === 0) return alert('No data to export.');
+      const blob = new Blob([JSON.stringify(flightData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `flight_trajectories_${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      localStorage.removeItem('flightTrajectories');
+      flightData = [];
+      globe.arcsData([]);
+      updateStats();
+    });
+
+    // Bootstrapping Sequence
+    const initSystem = async () => {
+      try {
+        const response = await fetch('./airports.json');
+        if (!response.ok) throw new Error('Network response was not ok');
+        airportDB = await response.json();
+        
+        const saved = localStorage.getItem('flightTrajectories');
+        if (saved) {
+          flightData = JSON.parse(saved);
+          globe.arcsData(flightData);
+          updateStats();
+        }
+      } catch (error) {
+        console.error('Bootstrapping failed:', error);
+        alert('Initialization Error: Must be run via local server (e.g., Python http.server) due to CORS policies.');
+      }
+    };
+
+    initSystem();
+  </script>
+</body>
+</html>
