@@ -2,8 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Global Spatial Data Visualization - 8K Ultra HD</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <title>Spatial Data Visualization</title>
     <script src="https://unpkg.com/globe.gl@2.25.3/dist/globe.gl.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
@@ -11,10 +10,10 @@
     
     <style>
         body { margin: 0; background: #000; color: #eee; font-family: system-ui; overflow: hidden; }
-        #ui { position: absolute; top: 15px; right: 15px; z-index: 10; background: rgba(10,10,10,0.85); padding: 18px; border-radius: 8px; width: 320px; border: 1px solid #333; backdrop-filter: blur(4px); max-height: 90vh; overflow-y: auto; box-shadow: -4px 4px 15px rgba(0,0,0,0.8); }
+        #ui { position: absolute; top: 15px; right: 15px; z-index: 10; background: rgba(10,10,10,0.85); padding: 18px; border-radius: 8px; width: 300px; border: 1px solid #333; backdrop-filter: blur(4px); max-height: 90vh; overflow-y: auto; box-shadow: -4px 4px 15px rgba(0,0,0,0.8); }
         h3 { margin: 0 0 12px; color: #00ff88; font-size: 16px; border-bottom: 1px solid #222; padding-bottom: 8px; }
         .group { margin-bottom: 10px; position: relative; }
-        label { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-bottom: 4px; text-transform: uppercase; font-weight: bold; }
+        label { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-bottom: 4px; font-weight: bold; }
         input[type="text"], input[type="file"], select, button { width: 100%; background: #1a1a1a; color: #fff; border: 1px solid #333; padding: 8px; border-radius: 4px; font-size: 13px; box-sizing: border-box; }
         input[type="range"] { width: 100%; cursor: pointer; accent-color: #00ff88; }
         button { cursor: pointer; transition: 0.2s; margin-top: 5px; }
@@ -30,193 +29,247 @@
         .match-hl { color: #00ff88; font-weight: bold; }
         .sugg-item:hover .match-hl { color: #000; }
         .type-badge { display: inline-block; padding: 2px 4px; background: #333; border-radius: 3px; font-size: 10px; margin-right: 5px; color: #aaa; }
-        .sugg-item:hover .type-badge { background: #000; color: #00ff88; }
+        
+        #canvas2d { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        #globeViz { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2; transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
 <body>
     <div id="ui">
-        <h3 id="ui-title">地理空间智能分析系统</h3>
+        <h3 id="ui-title">空间数据可视化</h3>
         <div class="flex">
             <button id="b-zh" class="active" onclick="switchLang('zh')">中文</button>
             <button id="b-en" onclick="switchLang('en')">EN</button>
         </div>
         
         <div class="group">
-            <label id="l-search">全域智能定位 (中英/模糊)</label>
+            <label id="l-search">节点搜索</label>
             <input type="text" id="src" placeholder="输入 纽约, new york, pvg..." autocomplete="off" oninput="debounceSearch()" onblur="hideSuggestions()" onkeydown="if(event.keyCode==13)goFirst()">
             <div id="sugg-box"></div>
         </div>
 
-        <div class="group"><label id="l-file">导入高通量轨迹阵列 (.csv)</label><input type="file" id="fIn" accept=".csv"></div>
+        <div class="group"><label id="l-file">导入航线数据 (.csv)</label><input type="file" id="fIn" accept=".csv"></div>
         
         <div class="group">
-            <label id="l-filter"><span>过滤低频底噪 (Weight)</span><span id="filter-val" style="color:#00ff88">≥ 1</span></label>
+            <label id="l-filter"><span>过滤阈值 (Weight)</span><span id="filter-val" style="color:#00ff88">≥ 1</span></label>
             <input type="range" id="wFilter" min="1" max="50" value="1" step="1" oninput="applyFilter(this.value)">
         </div>
 
         <div class="group">
-            <label id="l-theme">地球主题模式 (8K Theme)</label>
+            <label id="l-theme">地图主题</label>
             <select id="gTheme" onchange="changeTheme()">
-                <option value="color" selected>8K 真实卫星遥感 (Color)</option>
-                <option value="dark">8K 暗色科技流向 (Dark)</option>
+                <option value="color" selected>卫星遥感 (Color)</option>
+                <option value="dark">暗色流向 (Dark)</option>
             </select>
+            <button onclick="toggleProjection()" id="btnProj">▤ 切换为 2D 展开图</button>
         </div>
 
         <div class="group">
-            <label id="l-view">多维度图层控制</label>
+            <label id="l-view">图层控制</label>
             <select id="vMode" onchange="renderLayers()">
-                <option value="all">全维度渲染 (轨迹 + 核心枢纽)</option>
-                <option value="arc">仅拓扑连线 (Arcs Only)</option>
-                <option value="hub">仅热力散点 (Hubs Only)</option>
+                <option value="all">显示全部</option>
+                <option value="arc">仅显示航线</option>
+                <option value="hub">仅显示机场</option>
             </select>
         </div>
         
         <div class="group">
-            <label id="l-rotate">空间旋转角速度 (ω)</label>
+            <label id="l-rotate">自转速度</label>
             <select id="rSpeed" onchange="setRotation()">
-                <option value="0" selected>锁定视角 (ω=0) - 默认</option>
-                <option value="4.0">15秒/转 (高频演示模式)</option>
-                <option value="2.0">30秒/转 (标准模式)</option>
-                <option value="1.0">60秒/转 (平滑分析模式)</option>
-                <option value="0.000694">真实地球同步自转</option>
+                <option value="0" selected>静止 - 默认</option>
+                <option value="4.0">快速</option>
+                <option value="1.0">慢速</option>
             </select>
         </div>
 
         <div class="flex" style="margin-top: 15px;">
-            <button onclick="exportSnapshot()">📸 导出 8K 快照</button>
+            <button onclick="exportSnapshot(false)">📸 3D 截图</button>
+            <button onclick="exportSnapshot(true)">📸 2D 截图</button>
+        </div>
+        <div class="flex">
             <button onclick="clearAll()" style="color:#ff5555; border-color:#422;">清除数据</button>
         </div>
         <div id="sys-msg">内核启动中...</div>
     </div>
     
+    <canvas id="canvas2d"></canvas>
     <div id="globeViz"></div>
 
     <script>
         const statsObj = new Stats();
         statsObj.showPanel(0);
         statsObj.dom.style.position = 'absolute'; statsObj.dom.style.left = '15px'; statsObj.dom.style.top = '15px'; statsObj.dom.style.transform = 'scale(1.2)';
+        statsObj.dom.style.zIndex = '100';
         document.body.appendChild(statsObj.dom);
         function animate() { statsObj.update(); requestAnimationFrame(animate); } requestAnimationFrame(animate);
 
-        let db = {}, provs = [], lang = 'zh', curTheme = 'color';
+        let db = {}, provs = [], lang = 'zh', curTheme = 'color', is2DMode = false;
         let largeCities = [], allCities = [], isAirportsOK = false, isProvsOK = false;
         let cLabelState = -1, cPolyState = -1; 
         let rawArcs = [], rawHubs = [], renderArcs = [], renderHubs = [];
 
-        const dict = { zh: { title: "地理空间智能分析系统", sLabel: "后台 Worker 解析中...", fLabel: "过滤低频底噪 (Weight)" }, en: { title: "Spatial Analysis System", sLabel: "Worker Parsing...", fLabel: "Filter Noise (Weight)" } };
+        const dict = { zh: { title: "空间数据可视化", sLabel: "解析中...", fLabel: "过滤阈值 (Weight)" }, en: { title: "Spatial Visualization", sLabel: "Parsing...", fLabel: "Filter (Weight)" } };
         
         const T = {
-            color: { img: './earth-color.jpg', arcN: '#00ffff', arcH: '#ff0055', pFill: 'rgba(255,255,255,0.08)', pStrk: 'rgba(255,255,255,0.6)', bg: 'rgba(0,0,0,0.7)', text: '#fff', border: 'transparent', atmos: '#3a80df' },
-            dark:  { img: './earth-dark.jpg',  arcN: '#00ff88', arcH: '#ff0055', pFill: 'rgba(0,255,136,0.02)',  pStrk: 'rgba(68,68,68,0.8)', bg: 'rgba(0,0,0,0.8)', text: '#00ff88', border: '#00ff88', atmos: '#00ff88' }
+            color: { img: './earth-color.jpg', arcN: '#00ffff', arcH: '#ff0055', pFill: 'rgba(255,255,255,0.08)', pStrk: 'rgba(255,255,255,0.6)', bg: 'rgba(0,0,0,0.7)', text: '#fff', border: 'transparent', atmos: '#3a80df', mapBg: '#051329' },
+            dark:  { img: './earth-dark.jpg',  arcN: '#00ff88', arcH: '#ff0055', pFill: 'rgba(0,255,136,0.02)',  pStrk: 'rgba(68,68,68,0.8)', bg: 'rgba(0,0,0,0.8)', text: '#00ff88', border: '#00ff88', atmos: '#00ff88', mapBg: '#020202' }
         };
 
-        const searchAliasMap = {
-            "北京": ["beijing", "pek", "pkx", "bjs"], "上海": ["shanghai", "pvg", "sha"], "广州": ["guangzhou", "can"], "深圳": ["shenzhen", "szx"],
-            "成都": ["chengdu", "ctu", "tfu"], "香港": ["hongkong", "hkg"], "台北": ["taipei", "tpe"], "纽约": ["newyork", "nyc", "jfk", "ewr", "lga"],
-            "伦敦": ["london", "lhr", "lgw"], "巴黎": ["paris", "cdg", "ory"], "东京": ["tokyo", "tyo", "hnd", "nrt"], "首尔": ["seoul", "icn", "gmp"],
-            "洛杉矶": ["losangeles", "lax"], "悉尼": ["sydney", "syd"], "法兰克福": ["frankfurt", "fra"]
-        };
+        // 预加载 2D 高清底图资源
+        const img2DColor = new Image(); img2DColor.src = T.color.img;
+        const img2DDark = new Image(); img2DDark.src = T.dark.img;
 
         const normalizeStr = str => (str || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
         function msg(text, color="#ffb86c") { document.getElementById('sys-msg').innerHTML = `<span style="color:${color}">${text}</span>`; }
 
         // ==========================================
-        // 8K 超清光学引擎
+        // 3D WebGL 引擎配置
         // ==========================================
-        const world = Globe({ rendererConfig: { antialias: true, alpha: true } })(document.getElementById('globeViz'));
+        const world = Globe({ rendererConfig: { antialias: true, alpha: true, preserveDrawingBuffer: true } })(document.getElementById('globeViz'));
 
-        // 【打光修复】：将环境光调低至 0.15，只负责稍微照亮暗面，杜绝 8K 贴图过曝
-        setTimeout(() => {
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.15); 
-            world.scene().add(ambientLight);
-        }, 100);
-
-        world.globeImageUrl(T[curTheme].img);
-        world.bumpImageUrl('./earth-topology.png'); 
-        world.pointOfView({ alt: 2.5 });
-        
+        world.globeImageUrl(T[curTheme].img).bumpImageUrl('./earth-topology.png').pointOfView({ alt: 2.5 });
         world.showAtmosphere(true).atmosphereColor(T[curTheme].atmos).atmosphereAltitude(0.15);
-        world.pointLat(d => d.lt).pointLng(d => d.lg);
-        world.pointAltitude(d => Math.min(d.v * 0.005, 0.8)).pointColor(d => d.v > 500 ? '#ff3300' : '#ffff00').pointRadius(0.5);
+        
         world.labelLat(d => d.lt).labelLng(d => d.lg).labelText(d => d.iata);
-        world.labelDotRadius(d => d.isLarge ? 0.08 : 0.04).labelColor(() => '#ffffff').labelResolution(4); 
-        world.arcStroke(d => Math.min(d.weight * 0.05, 2.0)).arcDashLength(0.4).arcDashGap(0.2).arcDashAnimateTime(2000);
+        world.labelDotRadius(d => {
+            const base = d.isLarge ? 0.20 : 0.12; 
+            return base + Math.min(d.v * 0.05, 0.6); 
+        });
+        world.labelColor(d => {
+            const alpha = Math.min(0.4 + (d.v * 0.15), 1.0); 
+            return `rgba(255, 255, 255, ${alpha})`;
+        });
+        world.labelResolution(4); 
+        
+        world.arcStroke(d => Math.min(d.weight * 0.05, 2.0));
         world.arcColor(d => d.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN);
+        
         world.polygonCapColor(() => T[curTheme].pFill).polygonStrokeColor(() => T[curTheme].pStrk);
         world.polygonLabel(d => `<div style="background:${T[curTheme].bg}; padding:4px; border-radius:4px; color:${T[curTheme].text}; border:1px solid ${T[curTheme].border};"><b>${lang==='zh'?(d.properties.name_zh||d.properties.name):d.properties.name}</b></div>`);
-
         world.renderer().setPixelRatio(window.devicePixelRatio); 
 
-        function injectMaterialDetails() {
-            setTimeout(() => {
-                const material = world.globeMaterial();
-                if (material) {
-                    material.bumpScale = 0.04; 
-                    if (material.map) material.map.anisotropy = world.renderer().capabilities.getMaxAnisotropy();
-                    if (material.bumpMap) material.bumpMap.anisotropy = world.renderer().capabilities.getMaxAnisotropy();
-                    material.needsUpdate = true;
-                }
-            }, 600);
-        }
-        injectMaterialDetails();
+        window.addEventListener('resize', () => { 
+            world.width(window.innerWidth).height(window.innerHeight); 
+            if(is2DMode) draw2DCanvas(); 
+        });
 
-        window.addEventListener('resize', () => { world.width(window.innerWidth).height(window.innerHeight); });
-
-        function changeTheme() {
-            msg("正在将 8K 纹理加载至显存，请稍等...", "#00ffff");
-            curTheme = document.getElementById('gTheme').value;
+        // ==========================================
+        // 2D Canvas 高清物理贴图渲染引擎重写
+        // ==========================================
+        function draw2DCanvas() {
+            const canvas = document.getElementById('canvas2d');
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            const ctx = canvas.getContext('2d');
             
-            setTimeout(() => {
-                world.globeImageUrl(T[curTheme].img); 
-                world.atmosphereColor(T[curTheme].atmos); 
-                injectMaterialDetails(); 
-                
-                world.arcColor(d => d.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN);
-                world.polygonCapColor(() => T[curTheme].pFill);
-                world.polygonStrokeColor(() => T[curTheme].pStrk);
-                
-                if (isProvsOK) { cPolyState = -1; world.polygonLabel(world.polygonLabel()); upd(); }
-                if (renderArcs.length > 0) { renderLayers(); }
-                
-                setTimeout(() => msg("✅ 8K 主题切换完成。"), 1000);
-            }, 50);
+            ctx.fillStyle = T[curTheme].mapBg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const mapW = canvas.width; const mapH = mapW / 2;
+            const offsetX = 0; const offsetY = (canvas.height - mapH) / 2;
+            
+            // 核心修改：利用预加载的真实 8K 物理贴图进行 Equirectangular 渲染
+            const bgImg = curTheme === 'color' ? img2DColor : img2DDark;
+            if (bgImg.complete && bgImg.naturalWidth !== 0) {
+                ctx.drawImage(bgImg, offsetX, offsetY, mapW, mapH);
+            }
+            
+            // 叠加一层微弱的半透明遮罩，压暗底图环境光，提升数据点（航线/光标）的信噪比
+            ctx.fillStyle = curTheme === 'color' ? 'rgba(0, 5, 20, 0.15)' : 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(offsetX, offsetY, mapW, mapH);
+
+            // 保持严密的线性数学映射方程
+            const getX = lng => offsetX + (lng + 180) * (mapW / 360);
+            const getY = lat => offsetY + (90 - lat) * (mapH / 180);
+
+            const v = document.getElementById('vMode').value;
+            if(v !== 'hub') {
+                ctx.lineWidth = 1;
+                renderArcs.forEach(arc => {
+                    ctx.beginPath();
+                    ctx.strokeStyle = arc.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN;
+                    ctx.globalAlpha = Math.min(0.3 + arc.weight * 0.05, 1.0);
+                    ctx.moveTo(getX(arc.startLng), getY(arc.startLat));
+                    ctx.lineTo(getX(arc.endLng), getY(arc.endLat));
+                    ctx.stroke();
+                });
+            }
+
+            if(v !== 'arc') {
+                renderHubs.forEach(hub => {
+                    ctx.beginPath();
+                    const alpha = Math.min(0.4 + (hub.v * 0.15), 1.0);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                    const radius = Math.max(2.5, 2.5 + Math.min(hub.v * 1.5, 6)); 
+                    ctx.arc(getX(hub.lg), getY(hub.lt), radius, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        function toggleProjection() {
+            is2DMode = !is2DMode;
+            const c = document.getElementById('canvas2d'), g = document.getElementById('globeViz'), btn = document.getElementById('btnProj');
+            if (is2DMode) {
+                draw2DCanvas();
+                c.style.opacity = 1; c.style.pointerEvents = 'auto';
+                g.style.opacity = 0; g.style.pointerEvents = 'none';
+                btn.innerText = "▤ 恢复 3D 视图";
+            } else {
+                c.style.opacity = 0; c.style.pointerEvents = 'none';
+                g.style.opacity = 1; g.style.pointerEvents = 'auto';
+                btn.innerText = "▤ 切换为 2D 展开图";
+            }
+        }
+
+        // ==========================================
+        // 核心逻辑与数据处理
+        // ==========================================
+        function changeTheme() {
+            curTheme = document.getElementById('gTheme').value;
+            world.globeImageUrl(T[curTheme].img).atmosphereColor(T[curTheme].atmos); 
+            world.arcColor(d => d.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN);
+            world.polygonCapColor(() => T[curTheme].pFill).polygonStrokeColor(() => T[curTheme].pStrk);
+            if (isProvsOK) { cPolyState = -1; world.polygonLabel(world.polygonLabel()); upd(); }
+            if(is2DMode) draw2DCanvas();
         }
 
         async function init() {
             Papa.parse("./optimized_airports.csv", {
                 download: true, header: true, skipEmptyLines: true, fastMode: true,
-                error: () => msg("错误: optimized_airports.csv 丢失", "red"),
                 complete: r => {
                     r.data.forEach(x => { 
                         if(x.iata_code && (x.type === 'large_airport' || x.type === 'medium_airport')) { 
-                            const item = { iata: x.iata_code.toUpperCase(), n: x.name, lt: +x.latitude_deg, lg: +x.longitude_deg, isLarge: x.type === 'large_airport' };
+                            const item = { iata: x.iata_code.toUpperCase(), n: x.name, lt: +x.latitude_deg, lg: +x.longitude_deg, isLarge: x.type === 'large_airport', v: 0 };
                             db[item.iata] = item; allCities.push(item);
                             if(item.isLarge) largeCities.push(item);
                         } 
                     });
+                    renderHubs = allCities; 
+                    world.labelsData(renderHubs);
                     isAirportsOK = true; upd(); 
                 }
             });
 
+            // 如果仅依赖 2D 图片底图，拓扑 json 其实已被弱化，但保留加载逻辑以防后续 3D hover 仍需识别板块
             fetch("./provinces.json").then(res => res.json()).then(tj => {
                 provs = (tj.type === "Topology") ? topojson.feature(tj, tj.objects[Object.keys(tj.objects)[0]]).features : tj.features;
-                isProvsOK = true; 
-                msg("✅ 系统就绪: 8K 超高清材质在线。"); 
-                upd(); 
-            }).catch(() => msg("错误: provinces.json 丢失", "red"));
+                isProvsOK = true; upd(); 
+            }).catch(()=>console.log('No provinces.json'));
         }
 
         function upd() {
             const alt = world.pointOfView().alt;
-            if (isAirportsOK) {
+            if (isAirportsOK && !is2DMode) {
                 let tLabel = alt > 1.5 ? 0 : (alt > 0.6 ? 1 : 2);
                 if (tLabel !== cLabelState) {
                     cLabelState = tLabel;
-                    world.labelsData(tLabel === 0 ? [] : (tLabel === 1 ? largeCities : allCities));
-                    world.labelSize(tLabel === 1 ? 0.12 : 0.06); 
+                    const displayData = tLabel === 0 ? [] : (tLabel === 1 ? largeCities : allCities);
+                    world.labelsData(displayData);
+                    world.labelSize(tLabel === 1 ? 0.20 : 0.12); 
                 }
             }
-            if (isProvsOK) {
+            if (isProvsOK && !is2DMode) {
                 let tPoly = alt < 1.6 ? 1 : 0;
                 if (tPoly !== cPolyState) {
                     cPolyState = tPoly;
@@ -225,107 +278,93 @@
             }
         }
 
-        let searchTimeout = null;
-        function debounceSearch() { clearTimeout(searchTimeout); searchTimeout = setTimeout(executeSearch, 150); }
-
-        function executeSearch() {
-            const rawQuery = document.getElementById('src').value.trim();
-            const q = normalizeStr(rawQuery);
-            const box = document.getElementById('sugg-box');
-            if (!q) { box.style.display = 'none'; return; }
-
-            let tokens = [q];
-            for (let zhKey in searchAliasMap) {
-                if (normalizeStr(zhKey).includes(q)) tokens.push(...searchAliasMap[zhKey]);
-                searchAliasMap[zhKey].forEach(enVal => { if (enVal.includes(q)) tokens.push(zhKey); });
-            }
-
-            let res = [];
-            allCities.forEach(c => {
-                if (tokens.some(t => normalizeStr(c.n).includes(t) || normalizeStr(c.iata).includes(t))) {
-                    res.push({ type: 'Airport', text: `${c.n} (${c.iata})`, lat: c.lt, lng: c.lg, alt: 0.5 });
-                }
-            });
-
-            provs.forEach(p => {
-                if (tokens.some(t => normalizeStr(p.properties.name).includes(t) || normalizeStr(p.properties.name_zh).includes(t))) {
-                    const c = p.geometry.coordinates[0][0];
-                    res.push({ type: 'Region', text: `${p.properties.name_zh || p.properties.name}`, lat: Array.isArray(c[0]) ? c[0][1] : c[1], lng: Array.isArray(c[0]) ? c[0][0] : c[0], alt: 1.2 });
-                }
-            });
-
-            if (res.length === 0) {
-                box.innerHTML = `<div style="padding:10px; color:#777; font-size:12px;">无坐标节点映射</div>`;
-            } else {
-                const hlRegex = new RegExp(`(${rawQuery.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi');
-                box.innerHTML = res.slice(0, 15).map(r => 
-                    `<div class="sugg-item" onmousedown="flyToTarget(${r.lat}, ${r.lng}, ${r.alt})"><span class="type-badge">${r.type}</span> ${r.text.replace(hlRegex, `<span class="match-hl">$1</span>`)}</div>`
-                ).join('');
-            }
-            box.style.display = 'block';
-        }
-
-        function hideSuggestions() { setTimeout(() => document.getElementById('sugg-box').style.display = 'none', 150); }
-        function flyToTarget(lat, lng, alt) { world.pointOfView({ lat, lng, alt }, 1500); document.getElementById('sugg-box').style.display = 'none'; }
-        function goFirst() { const fi = document.querySelector('.sugg-item'); if (fi) fi.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); }
-
-        // ==========================================
-        // 【核心提速】：深拷贝屏障隔离污染
-        // ==========================================
         document.getElementById('fIn').onchange = e => {
-            const file = e.target.files[0];
-            if (!file) return;
+            const file = e.target.files[0]; if (!file) return;
             msg(dict[lang].sLabel, "#00ffff");
-
-            const worker = new Worker('data_worker.js');
-            worker.onmessage = function(event) {
-                const res = event.data;
-                if (res.status === 'success') {
-                    rawArcs = res.rawArcs;
-                    rawHubs = res.rawHubs;
+            
+            Papa.parse(file, {
+                header: true, skipEmptyLines: true, fastMode: true,
+                complete: function(r) {
+                    const arcs = []; const hubs = new Map();
+                    r.data.forEach(row => {
+                        const o_code = (row.origin_iata || row.origin || '').trim().toUpperCase();
+                        const d_code = (row.dest_iata || row.dest || '').trim().toUpperCase();
+                        
+                        const origin = db[o_code], dest = db[d_code];
+                        const weight = parseInt(row.weight) || 1; 
+                        
+                        if (origin && dest) {
+                            arcs.push({ startLat: origin.lt, startLng: origin.lg, endLat: dest.lt, endLng: dest.lg, weight: weight });
+                            if(!hubs.has(origin.iata)) hubs.set(origin.iata, {iata: origin.iata, v:0});
+                            if(!hubs.has(dest.iata)) hubs.set(dest.iata, {iata: dest.iata, v:0});
+                            hubs.get(origin.iata).v += weight; hubs.get(dest.iata).v += weight;
+                        }
+                    });
+                    rawArcs = arcs; rawHubs = Array.from(hubs.values());
                     document.getElementById('wFilter').value = 1;
-                    document.getElementById('filter-val').innerText = '≥ 1';
                     applyFilter(1); 
-                    msg(`✅ 解析并渲染完毕: 生成 ${rawArcs.length} 条独立连线。`);
-                } else {
-                    msg(`致命错误: 子线程崩溃 - ${res.message}`, "red");
-                }
-                worker.terminate();
-            };
-
-            // 深拷贝隔离：抹除底层注入的循环引用与非法函数，彻底粉碎 DataCloneError
-            const cleanDB = JSON.parse(JSON.stringify(db));
-            worker.postMessage({ file: file, db: cleanDB });
+                    msg(`✅ 解析完成: 获取 ${rawArcs.length} 条航线。`);
+                },
+                error: function(err) { msg(`解析错误 - ${err.message}`, "red"); }
+            });
         };
 
         function applyFilter(threshold) {
             const minW = parseInt(threshold);
             document.getElementById('filter-val').innerText = `≥ ${minW}`;
             renderArcs = rawArcs.filter(d => d.weight >= minW);
-            renderHubs = rawHubs.filter(d => d.v >= minW); 
+            
+            allCities.forEach(c => c.v = 0);
+            largeCities.forEach(c => c.v = 0);
+            
+            rawHubs.filter(d => d.v >= minW).forEach(h => { if (db[h.iata]) db[h.iata].v = h.v; });
+            renderHubs = allCities; 
+            
             renderLayers();
         }
 
         function renderLayers() {
             const v = document.getElementById('vMode').value;
-            world.arcsData(v==='hub'?[]:renderArcs).pointsData(v==='arc'?[]:renderHubs);
+            world.arcsData(v==='hub'?[]:renderArcs).labelsData(v==='arc'?[]:renderHubs);
+            if (v !== 'arc') {
+                world.labelColor(world.labelColor());
+                world.labelDotRadius(world.labelDotRadius());
+            }
+            if(is2DMode) draw2DCanvas();
         }
 
-        function clearAll() { rawArcs=[]; rawHubs=[]; renderArcs=[]; renderHubs=[]; world.arcsData([]).pointsData([]); document.getElementById('fIn').value=''; msg("数据已清空。"); }
-        function exportSnapshot() { world.renderer().render(world.scene(), world.camera()); const a = document.createElement('a'); a.href = world.renderer().domElement.toDataURL('image/jpeg', 1.0); a.download = `Snapshot_8K_${Date.now()}.jpg`; a.click(); }
+        function clearAll() { 
+            rawArcs=[]; rawHubs=[]; renderArcs=[]; 
+            allCities.forEach(c => c.v = 0); largeCities.forEach(c => c.v = 0);
+            renderHubs=allCities;
+            renderLayers(); document.getElementById('fIn').value=''; msg("数据已清除。"); 
+        }
+
+        function exportSnapshot(capture2D) { 
+            const a = document.createElement('a');
+            if (capture2D) {
+                draw2DCanvas();
+                a.href = document.getElementById('canvas2d').toDataURL('image/jpeg', 1.0);
+                a.download = `Map_2D_${Date.now()}.jpg`;
+            } else {
+                world.renderer().render(world.scene(), world.camera()); 
+                a.href = world.renderer().domElement.toDataURL('image/jpeg', 1.0); 
+                a.download = `Globe_3D_${Date.now()}.jpg`;
+            }
+            a.click(); 
+        }
+
         function setRotation() { const val = parseFloat(document.getElementById('rSpeed').value); world.controls().autoRotate = (val > 0); if (val > 0) world.controls().autoRotateSpeed = val; }
         
         function switchLang(l) {
             lang = l;
             ['zh', 'en'].forEach(k => document.getElementById(`b-${k}`).className = l===k?'active':'');
             document.getElementById('ui-title').innerText = dict[l].title;
-            document.getElementById('l-filter').querySelector('span').innerText = dict[l].fLabel;
-            if (isProvsOK) world.polygonLabel(world.polygonLabel()); 
+            if (isProvsOK && !is2DMode) world.polygonLabel(world.polygonLabel()); 
         }
 
         world.onZoom(upd); 
-        init();
-        setRotation(); 
+        init(); setRotation(); 
     </script>
 </body>
 </html>
