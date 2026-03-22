@@ -10,12 +10,22 @@
     
     <style>
         body { margin: 0; background: #000; color: #eee; font-family: system-ui; overflow: hidden; }
-        #ui { position: absolute; top: 15px; right: 15px; z-index: 10; background: rgba(10,10,10,0.85); padding: 18px; border-radius: 8px; width: 300px; border: 1px solid #333; backdrop-filter: blur(4px); max-height: 90vh; overflow-y: auto; box-shadow: -4px 4px 15px rgba(0,0,0,0.8); }
-        h3 { margin: 0 0 12px; color: #00ff88; font-size: 16px; border-bottom: 1px solid #222; padding-bottom: 8px; }
+        
+        /* UI 面板与平滑折叠动画 */
+        #ui { position: absolute; top: 15px; right: 15px; z-index: 10; background: rgba(10,10,10,0.85); padding: 18px; border-radius: 8px; width: 300px; border: 1px solid #333; backdrop-filter: blur(4px); max-height: 90vh; overflow-y: auto; box-shadow: -4px 4px 15px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s; transform: translateX(0); }
+        #ui.collapsed { transform: translateX(350px); opacity: 0; pointer-events: none; }
+        
+        /* 极简呼出按钮与收起按钮 */
+        #btn-show-ui { position: absolute; top: 15px; right: 15px; z-index: 5; background: rgba(10,10,10,0.6); border: 1px solid #333; color: #aaa; width: 32px; height: 32px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); font-size: 16px; transition: 0.2s; padding: 0; }
+        #btn-show-ui:hover { color: #00ff88; border-color: #00ff88; }
+        
+        .min-btn { position: absolute; top: 15px; right: 15px; width: 30px !important; height: 30px; padding: 0 !important; background: transparent !important; border: 1px solid #333 !important; color: #aaa !important; font-size: 14px !important; line-height: 1; text-align: center; border-radius: 4px; margin-top: 0 !important; transition: 0.2s; }
+        .min-btn:hover { border-color: #ff5555 !important; color: #ff5555 !important; }
+
+        h3 { margin: 0 0 12px; color: #00ff88; font-size: 16px; border-bottom: 1px solid #222; padding-bottom: 8px; width: 85%; }
         .group { margin-bottom: 10px; position: relative; }
         label { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-bottom: 4px; font-weight: bold; }
         input[type="text"], input[type="file"], select, button { width: 100%; background: #1a1a1a; color: #fff; border: 1px solid #333; padding: 8px; border-radius: 4px; font-size: 13px; box-sizing: border-box; }
-        input[type="range"] { width: 100%; cursor: pointer; accent-color: #00ff88; }
         button { cursor: pointer; transition: 0.2s; margin-top: 5px; }
         button:hover { border-color: #00ff88; }
         #sys-msg { font-size: 11px; color: #ffb86c; margin-top: 10px; font-family: monospace; line-height: 1.5; background: #111; padding: 8px; border-radius: 4px; border: 1px solid #333; }
@@ -35,7 +45,10 @@
     </style>
 </head>
 <body>
+    <button id="btn-show-ui" onclick="toggleUI()" title="展开面板">⚙️</button>
+    
     <div id="ui">
+        <button class="min-btn" onclick="toggleUI()" title="收起控制面板">✕</button>
         <h3 id="ui-title">空间数据可视化</h3>
         <div class="flex">
             <button id="b-zh" class="active" onclick="switchLang('zh')">中文</button>
@@ -49,11 +62,6 @@
         </div>
 
         <div class="group"><label id="l-file">导入航线数据 (.csv)</label><input type="file" id="fIn" accept=".csv"></div>
-        
-        <div class="group">
-            <label id="l-filter"><span>过滤阈值 (Weight)</span><span id="filter-val" style="color:#00ff88">≥ 1</span></label>
-            <input type="range" id="wFilter" min="1" max="50" value="1" step="1" oninput="applyFilter(this.value)">
-        </div>
 
         <div class="group">
             <label id="l-theme">地图主题</label>
@@ -106,21 +114,31 @@
         let db = {}, provs = [], lang = 'zh', curTheme = 'color', is2DMode = false;
         let largeCities = [], allCities = [], isAirportsOK = false, isProvsOK = false;
         let cLabelState = -1, cPolyState = -1; 
+        
+        let hasData = false; 
+
         let rawArcs = [], rawHubs = [], renderArcs = [], renderHubs = [];
 
-        const dict = { zh: { title: "空间数据可视化", sLabel: "解析中...", fLabel: "过滤阈值 (Weight)" }, en: { title: "Spatial Visualization", sLabel: "Parsing...", fLabel: "Filter (Weight)" } };
+        const dict = { zh: { title: "空间数据可视化", sLabel: "解析中..." }, en: { title: "Spatial Visualization", sLabel: "Parsing..." } };
         
         const T = {
             color: { img: './earth-color.jpg', arcN: '#00ffff', arcH: '#ff0055', pFill: 'rgba(255,255,255,0.08)', pStrk: 'rgba(255,255,255,0.6)', bg: 'rgba(0,0,0,0.7)', text: '#fff', border: 'transparent', atmos: '#3a80df', mapBg: '#051329' },
             dark:  { img: './earth-dark.jpg',  arcN: '#00ff88', arcH: '#ff0055', pFill: 'rgba(0,255,136,0.02)',  pStrk: 'rgba(68,68,68,0.8)', bg: 'rgba(0,0,0,0.8)', text: '#00ff88', border: '#00ff88', atmos: '#00ff88', mapBg: '#020202' }
         };
 
-        // 预加载 2D 高清底图资源
         const img2DColor = new Image(); img2DColor.src = T.color.img;
         const img2DDark = new Image(); img2DDark.src = T.dark.img;
 
         const normalizeStr = str => (str || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
         function msg(text, color="#ffb86c") { document.getElementById('sys-msg').innerHTML = `<span style="color:${color}">${text}</span>`; }
+
+        // ==========================================
+        // 面板折叠逻辑交互
+        // ==========================================
+        function toggleUI() {
+            const ui = document.getElementById('ui');
+            ui.classList.toggle('collapsed');
+        }
 
         // ==========================================
         // 3D WebGL 引擎配置
@@ -154,7 +172,7 @@
         });
 
         // ==========================================
-        // 2D Canvas 高清物理贴图渲染引擎重写
+        // 2D Canvas 高清物理贴图渲染引擎
         // ==========================================
         function draw2DCanvas() {
             const canvas = document.getElementById('canvas2d');
@@ -167,17 +185,14 @@
             const mapW = canvas.width; const mapH = mapW / 2;
             const offsetX = 0; const offsetY = (canvas.height - mapH) / 2;
             
-            // 核心修改：利用预加载的真实 8K 物理贴图进行 Equirectangular 渲染
             const bgImg = curTheme === 'color' ? img2DColor : img2DDark;
             if (bgImg.complete && bgImg.naturalWidth !== 0) {
                 ctx.drawImage(bgImg, offsetX, offsetY, mapW, mapH);
             }
             
-            // 叠加一层微弱的半透明遮罩，压暗底图环境光，提升数据点（航线/光标）的信噪比
             ctx.fillStyle = curTheme === 'color' ? 'rgba(0, 5, 20, 0.15)' : 'rgba(0, 0, 0, 0.5)';
             ctx.fillRect(offsetX, offsetY, mapW, mapH);
 
-            // 保持严密的线性数学映射方程
             const getX = lng => offsetX + (lng + 180) * (mapW / 360);
             const getY = lat => offsetY + (90 - lat) * (mapH / 180);
 
@@ -251,7 +266,6 @@
                 }
             });
 
-            // 如果仅依赖 2D 图片底图，拓扑 json 其实已被弱化，但保留加载逻辑以防后续 3D hover 仍需识别板块
             fetch("./provinces.json").then(res => res.json()).then(tj => {
                 provs = (tj.type === "Topology") ? topojson.feature(tj, tj.objects[Object.keys(tj.objects)[0]]).features : tj.features;
                 isProvsOK = true; upd(); 
@@ -261,12 +275,21 @@
         function upd() {
             const alt = world.pointOfView().alt;
             if (isAirportsOK && !is2DMode) {
-                let tLabel = alt > 1.5 ? 0 : (alt > 0.6 ? 1 : 2);
-                if (tLabel !== cLabelState) {
-                    cLabelState = tLabel;
-                    const displayData = tLabel === 0 ? [] : (tLabel === 1 ? largeCities : allCities);
-                    world.labelsData(displayData);
-                    world.labelSize(tLabel === 1 ? 0.20 : 0.12); 
+                if (hasData) {
+                    if (cLabelState !== 'data_locked') {
+                        cLabelState = 'data_locked';
+                        const v = document.getElementById('vMode').value;
+                        world.labelsData(v==='arc' ? [] : renderHubs);
+                        world.labelSize(0.18); 
+                    }
+                } else {
+                    let tLabel = alt > 1.5 ? 0 : (alt > 0.6 ? 1 : 2);
+                    if (tLabel !== cLabelState) {
+                        cLabelState = tLabel;
+                        const displayData = tLabel === 0 ? [] : (tLabel === 1 ? largeCities : allCities);
+                        world.labelsData(displayData);
+                        world.labelSize(tLabel === 1 ? 0.20 : 0.12); 
+                    }
                 }
             }
             if (isProvsOK && !is2DMode) {
@@ -300,32 +323,45 @@
                             hubs.get(origin.iata).v += weight; hubs.get(dest.iata).v += weight;
                         }
                     });
-                    rawArcs = arcs; rawHubs = Array.from(hubs.values());
-                    document.getElementById('wFilter').value = 1;
-                    applyFilter(1); 
-                    msg(`✅ 解析完成: 获取 ${rawArcs.length} 条航线。`);
+                    rawArcs = arcs; 
+                    rawHubs = Array.from(hubs.values());
+                    hasData = true; 
+                    
+                    applyDataMapping(); 
+                    msg(`✅ 解析完成: 获取 ${rawArcs.length} 条航线并自动隐去无关节点。`);
                 },
                 error: function(err) { msg(`解析错误 - ${err.message}`, "red"); }
             });
         };
 
-        function applyFilter(threshold) {
-            const minW = parseInt(threshold);
-            document.getElementById('filter-val').innerText = `≥ ${minW}`;
-            renderArcs = rawArcs.filter(d => d.weight >= minW);
-            
+        function applyDataMapping() {
+            renderArcs = rawArcs; // 直接应用所有解析到的航线
             allCities.forEach(c => c.v = 0);
-            largeCities.forEach(c => c.v = 0);
             
-            rawHubs.filter(d => d.v >= minW).forEach(h => { if (db[h.iata]) db[h.iata].v = h.v; });
-            renderHubs = allCities; 
+            const activeNodes = [];
+            rawHubs.forEach(h => { 
+                if (db[h.iata] && h.v >= 1) { // 仅渲染有效连通节点
+                    db[h.iata].v = h.v; 
+                    activeNodes.push(db[h.iata]);
+                }
+            });
+            renderHubs = activeNodes; 
             
+            cLabelState = -1; 
             renderLayers();
         }
 
         function renderLayers() {
             const v = document.getElementById('vMode').value;
-            world.arcsData(v==='hub'?[]:renderArcs).labelsData(v==='arc'?[]:renderHubs);
+            world.arcsData(v==='hub'?[]:renderArcs);
+            
+            if (hasData) {
+                world.labelsData(v==='arc' ? [] : renderHubs);
+            } else {
+                cLabelState = -1;
+                upd();
+            }
+
             if (v !== 'arc') {
                 world.labelColor(world.labelColor());
                 world.labelDotRadius(world.labelDotRadius());
@@ -335,9 +371,14 @@
 
         function clearAll() { 
             rawArcs=[]; rawHubs=[]; renderArcs=[]; 
-            allCities.forEach(c => c.v = 0); largeCities.forEach(c => c.v = 0);
-            renderHubs=allCities;
-            renderLayers(); document.getElementById('fIn').value=''; msg("数据已清除。"); 
+            allCities.forEach(c => c.v = 0); 
+            renderHubs = allCities;
+            hasData = false; 
+            
+            document.getElementById('fIn').value=''; 
+            cLabelState = -1; 
+            renderLayers(); 
+            msg("数据已清除并恢复基础节点显示。"); 
         }
 
         function exportSnapshot(capture2D) { 
