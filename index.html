@@ -132,23 +132,26 @@
         const normalizeStr = str => (str || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
         function msg(text, color="#ffb86c") { document.getElementById('sys-msg').innerHTML = `<span style="color:${color}">${text}</span>`; }
 
-        // ==========================================
-        // 面板折叠逻辑交互
-        // ==========================================
         function toggleUI() {
             const ui = document.getElementById('ui');
             ui.classList.toggle('collapsed');
         }
 
         // ==========================================
-        // 3D WebGL 引擎配置
+        // 3D WebGL 引擎配置 (物理级解耦，杜绝链式调用崩溃)
         // ==========================================
         const world = Globe({ rendererConfig: { antialias: true, alpha: true, preserveDrawingBuffer: true } })(document.getElementById('globeViz'));
 
-        world.globeImageUrl(T[curTheme].img).bumpImageUrl('./earth-topology.png').pointOfView({ alt: 2.5 });
-        world.showAtmosphere(true).atmosphereColor(T[curTheme].atmos).atmosphereAltitude(0.15);
+        world.globeImageUrl(T[curTheme].img);
+        world.bumpImageUrl('./earth-topology.png');
+        world.pointOfView({ alt: 2.5 });
+        world.showAtmosphere(true);
+        world.atmosphereColor(T[curTheme].atmos);
+        world.atmosphereAltitude(0.15);
         
-        world.labelLat(d => d.lt).labelLng(d => d.lg).labelText(d => d.iata);
+        world.labelLat(d => d.lt);
+        world.labelLng(d => d.lg);
+        world.labelText(d => d.iata);
         world.labelDotRadius(d => {
             const base = d.isLarge ? 0.20 : 0.12; 
             return base + Math.min(d.v * 0.05, 0.6); 
@@ -162,12 +165,15 @@
         world.arcStroke(d => Math.min(d.weight * 0.05, 2.0));
         world.arcColor(d => d.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN);
         
-        world.polygonCapColor(() => T[curTheme].pFill).polygonStrokeColor(() => T[curTheme].pStrk);
+        world.polygonCapColor(() => T[curTheme].pFill);
+        world.polygonStrokeColor(() => T[curTheme].pStrk);
         world.polygonLabel(d => `<div style="background:${T[curTheme].bg}; padding:4px; border-radius:4px; color:${T[curTheme].text}; border:1px solid ${T[curTheme].border};"><b>${lang==='zh'?(d.properties.name_zh||d.properties.name):d.properties.name}</b></div>`);
+        
         world.renderer().setPixelRatio(window.devicePixelRatio); 
 
         window.addEventListener('resize', () => { 
-            world.width(window.innerWidth).height(window.innerHeight); 
+            world.width(window.innerWidth);
+            world.height(window.innerHeight); 
             if(is2DMode) draw2DCanvas(); 
         });
 
@@ -242,10 +248,16 @@
         // ==========================================
         function changeTheme() {
             curTheme = document.getElementById('gTheme').value;
-            world.globeImageUrl(T[curTheme].img).atmosphereColor(T[curTheme].atmos); 
+            world.globeImageUrl(T[curTheme].img);
+            world.atmosphereColor(T[curTheme].atmos); 
             world.arcColor(d => d.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN);
-            world.polygonCapColor(() => T[curTheme].pFill).polygonStrokeColor(() => T[curTheme].pStrk);
-            if (isProvsOK) { cPolyState = -1; world.polygonLabel(world.polygonLabel()); upd(); }
+            world.polygonCapColor(() => T[curTheme].pFill);
+            world.polygonStrokeColor(() => T[curTheme].pStrk);
+            if (isProvsOK) { 
+                cPolyState = -1; 
+                world.polygonLabel(world.polygonLabel()); 
+                upd(); 
+            }
             if(is2DMode) draw2DCanvas();
         }
 
@@ -262,13 +274,15 @@
                     });
                     renderHubs = allCities; 
                     world.labelsData(renderHubs);
-                    isAirportsOK = true; upd(); 
+                    isAirportsOK = true; 
+                    upd(); 
                 }
             });
 
             fetch("./provinces.json").then(res => res.json()).then(tj => {
                 provs = (tj.type === "Topology") ? topojson.feature(tj, tj.objects[Object.keys(tj.objects)[0]]).features : tj.features;
-                isProvsOK = true; upd(); 
+                isProvsOK = true; 
+                upd(); 
             }).catch(()=>console.log('No provinces.json'));
         }
 
@@ -328,19 +342,19 @@
                     hasData = true; 
                     
                     applyDataMapping(); 
-                    msg(`✅ 解析完成: 获取 ${rawArcs.length} 条航线并自动隐去无关节点。`);
+                    msg(`✅ 解析完成: 获取 ${rawArcs.length} 条有效航线。`);
                 },
                 error: function(err) { msg(`解析错误 - ${err.message}`, "red"); }
             });
         };
 
         function applyDataMapping() {
-            renderArcs = rawArcs; // 直接应用所有解析到的航线
+            renderArcs = rawArcs; 
             allCities.forEach(c => c.v = 0);
             
             const activeNodes = [];
             rawHubs.forEach(h => { 
-                if (db[h.iata] && h.v >= 1) { // 仅渲染有效连通节点
+                if (db[h.iata] && h.v >= 1) { 
                     db[h.iata].v = h.v; 
                     activeNodes.push(db[h.iata]);
                 }
@@ -378,7 +392,7 @@
             document.getElementById('fIn').value=''; 
             cLabelState = -1; 
             renderLayers(); 
-            msg("数据已清除并恢复基础节点显示。"); 
+            msg("数据已清除，已恢复全域节点显示。"); 
         }
 
         function exportSnapshot(capture2D) { 
@@ -395,7 +409,11 @@
             a.click(); 
         }
 
-        function setRotation() { const val = parseFloat(document.getElementById('rSpeed').value); world.controls().autoRotate = (val > 0); if (val > 0) world.controls().autoRotateSpeed = val; }
+        function setRotation() { 
+            const val = parseFloat(document.getElementById('rSpeed').value); 
+            world.controls().autoRotate = (val > 0); 
+            if (val > 0) world.controls().autoRotateSpeed = val; 
+        }
         
         function switchLang(l) {
             lang = l;
@@ -405,7 +423,8 @@
         }
 
         world.onZoom(upd); 
-        init(); setRotation(); 
+        init(); 
+        setRotation(); 
     </script>
 </body>
 </html>

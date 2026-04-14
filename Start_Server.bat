@@ -1,21 +1,21 @@
 @echo off
-chcp 65001 >nul
 title Flight Tracker Local Server
 
 echo ========================================
-echo   正在初始化本地飞行轨迹可视化引擎...
+echo  Initializing Local Visualization Engine
 echo ========================================
 echo.
 
-:: 强制进入绝对路径
+REM 1. Force absolute path execution
 cd /d D:\Flight-Tracker
 
-:: 唤醒系统默认浏览器并访问本地端口
-echo [*] 正在唤起默认浏览器...
-start http://localhost:8000
+REM 2. Asynchronous browser launch with 2-second delay to prevent TCP SYN rejection
+REM Using ping as a high-precision cross-compatible sleep command
+start "" /B cmd /c "ping 127.0.0.1 -n 3 >nul & start """" "http://localhost:8000""
 
-:: 启动 Python 高性能 HTTP 服务器
-echo [*] 本地服务器已启动，请勿关闭此窗口。
-echo [*] 如需停止服务，请直接关闭本黑框。
+REM 3. Bind high-performance Python HTTP daemon to port 8000 (Blocking Process)
+echo [*] Server daemon is binding to 0.0.0.0:8000
+echo [*] DO NOT close this terminal window.
+echo [*] Press Ctrl+C to terminate the service safely.
 echo.
 python -m http.server 8000
