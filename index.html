@@ -2,178 +2,69 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Geo-Intelligence Pro</title>
+    <title>Spatial Data Visualization</title>
     <script src="https://unpkg.com/globe.gl@2.25.3/dist/globe.gl.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/16/Stats.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@700&display=swap" rel="stylesheet">
-
+    
     <style>
-        :root {
-            --green: #00ff88;
-            --red: #ff2255;
-            --cyan: #00e5ff;
-            --bg-panel: rgba(6,10,18,0.92);
-            --border: rgba(0,255,136,0.18);
-            --text-dim: #6a7a8a;
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            background: #000;
-            color: #dce8f0;
-            font-family: 'JetBrains Mono', monospace;
-            overflow: hidden;
-        }
+        body { margin: 0; background: #000; color: #eee; font-family: system-ui; overflow: hidden; }
+        
+        /* UI 面板与平滑折叠动画 */
+        #ui { position: absolute; top: 15px; right: 15px; z-index: 10; background: rgba(10,10,10,0.85); padding: 18px; border-radius: 8px; width: 300px; border: 1px solid #333; backdrop-filter: blur(4px); max-height: 90vh; overflow-y: auto; box-shadow: -4px 4px 15px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s; transform: translateX(0); }
+        #ui.collapsed { transform: translateX(350px); opacity: 0; pointer-events: none; }
+        
+        /* 极简呼出按钮与收起按钮 */
+        #btn-show-ui { position: absolute; top: 15px; right: 15px; z-index: 5; background: rgba(10,10,10,0.6); border: 1px solid #333; color: #aaa; width: 32px; height: 32px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); font-size: 16px; transition: 0.2s; padding: 0; }
+        #btn-show-ui:hover { color: #00ff88; border-color: #00ff88; }
+        
+        .min-btn { position: absolute; top: 15px; right: 15px; width: 30px !important; height: 30px; padding: 0 !important; background: transparent !important; border: 1px solid #333 !important; color: #aaa !important; font-size: 14px !important; line-height: 1; text-align: center; border-radius: 4px; margin-top: 0 !important; transition: 0.2s; }
+        .min-btn:hover { border-color: #ff5555 !important; color: #ff5555 !important; }
 
-        /* ── PANEL ── */
-        #ui {
-            position: absolute; top: 15px; right: 15px; z-index: 10;
-            background: var(--bg-panel);
-            padding: 20px 18px 16px;
-            border-radius: 10px;
-            width: 300px;
-            border: 1px solid var(--border);
-            backdrop-filter: blur(12px);
-            max-height: 92vh; overflow-y: auto;
-            box-shadow: -4px 4px 30px rgba(0,0,0,0.9), 0 0 0 1px rgba(0,255,136,0.05) inset;
-            transition: transform 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.4s;
-        }
-        #ui.collapsed { transform: translateX(360px); opacity: 0; pointer-events: none; }
-
-        #btn-show-ui {
-            position: absolute; top: 15px; right: 15px; z-index: 5;
-            background: var(--bg-panel); border: 1px solid var(--border);
-            color: var(--text-dim); width: 34px; height: 34px;
-            border-radius: 6px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            backdrop-filter: blur(8px); font-size: 16px;
-            transition: 0.2s; padding: 0;
-        }
-        #btn-show-ui:hover { color: var(--green); border-color: var(--green); }
-
-        .min-btn {
-            position: absolute; top: 14px; right: 14px;
-            width: 28px; height: 28px; padding: 0;
-            background: transparent; border: 1px solid #2a3040;
-            color: var(--text-dim); font-size: 13px;
-            border-radius: 5px; cursor: pointer; transition: 0.2s;
-        }
-        .min-btn:hover { border-color: var(--red); color: var(--red); }
-
-        h3 {
-            margin: 0 0 14px; color: var(--green);
-            font-family: 'Syne', sans-serif;
-            font-size: 15px; letter-spacing: 0.08em;
-            border-bottom: 1px solid rgba(0,255,136,0.15);
-            padding-bottom: 10px; width: 84%;
-        }
-        .group { margin-bottom: 12px; position: relative; }
-
-        label {
-            display: flex; justify-content: space-between;
-            font-size: 10px; color: var(--text-dim);
-            margin-bottom: 5px; font-weight: 600;
-            text-transform: uppercase; letter-spacing: 0.08em;
-        }
-        input[type="text"], input[type="file"], select, button {
-            width: 100%; background: rgba(255,255,255,0.04);
-            color: #dce8f0; border: 1px solid #1e2a38;
-            padding: 8px 10px; border-radius: 5px;
-            font-size: 12px; font-family: 'JetBrains Mono', monospace;
-            box-sizing: border-box; transition: border-color 0.2s;
-        }
-        input[type="text"]:focus, select:focus { outline: none; border-color: var(--green); }
-        button { cursor: pointer; margin-top: 5px; }
-        button:hover { border-color: var(--green); color: var(--green); }
-
-        #sys-msg {
-            font-size: 10.5px; color: #f0a050; margin-top: 10px;
-            font-family: 'JetBrains Mono', monospace; line-height: 1.6;
-            background: rgba(0,0,0,0.4); padding: 8px 10px;
-            border-radius: 5px; border: 1px solid #1e2a38;
-            min-height: 36px;
-        }
-        .active { border-color: var(--green) !important; color: var(--green) !important; }
-        .flex { display: flex; gap: 6px; margin-bottom: 10px; }
-
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-thumb { background: #2a3a4a; border-radius: 3px; }
-
-        /* Autocomplete */
-        #sugg-box {
-            display: none; position: absolute; top: 100%; left: 0; width: 100%;
-            background: rgba(8,14,26,0.98); border: 1px solid #2a3a4a;
-            border-radius: 6px; max-height: 260px; overflow-y: auto;
-            z-index: 9999; margin-top: 3px; box-shadow: 0 6px 24px rgba(0,0,0,0.9);
-        }
-        .sugg-item {
-            padding: 9px 12px; font-size: 11px; color: #bcc8d4;
-            cursor: pointer; border-bottom: 1px solid #111a26; line-height: 1.5;
-        }
-        .sugg-item:hover { background: var(--green); color: #000; font-weight: 600; }
-        .match-hl { color: var(--green); font-weight: 700; }
+        h3 { margin: 0 0 12px; color: #00ff88; font-size: 16px; border-bottom: 1px solid #222; padding-bottom: 8px; width: 85%; }
+        .group { margin-bottom: 10px; position: relative; }
+        label { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-bottom: 4px; font-weight: bold; }
+        input[type="text"], input[type="file"], select, button { width: 100%; background: #1a1a1a; color: #fff; border: 1px solid #333; padding: 8px; border-radius: 4px; font-size: 13px; box-sizing: border-box; }
+        button { cursor: pointer; transition: 0.2s; margin-top: 5px; }
+        button:hover { border-color: #00ff88; }
+        #sys-msg { font-size: 11px; color: #ffb86c; margin-top: 10px; font-family: monospace; line-height: 1.5; background: #111; padding: 8px; border-radius: 4px; border: 1px solid #333; }
+        .active { border-color: #00ff88; color: #00ff88; }
+        .flex { display: flex; gap: 5px; margin-bottom: 10px; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        
+        #sugg-box { display: none; position: absolute; top: 100%; left: 0; width: 100%; background: rgba(20,20,20,0.95); border: 1px solid #444; border-radius: 4px; max-height: 280px; overflow-y: auto; z-index: 9999; margin-top: 2px; box-shadow: 0 4px 15px rgba(0,0,0,0.9); }
+        .sugg-item { padding: 10px 12px; font-size: 12px; color: #ddd; cursor: pointer; border-bottom: 1px solid #333; line-height: 1.4; }
+        .sugg-item:hover { background: #00ff88; color: #000; font-weight: bold; }
+        .match-hl { color: #00ff88; font-weight: bold; }
         .sugg-item:hover .match-hl { color: #000; }
-        .type-badge {
-            display: inline-block; padding: 1px 5px;
-            background: #1a2436; border-radius: 3px;
-            font-size: 9px; margin-right: 5px; color: #556a7a;
-        }
-
-        /* Layers */
-        #canvas2d {
-            position: absolute; top: 0; left: 0;
-            width: 100vw; height: 100vh; z-index: 1;
-            pointer-events: none; opacity: 0;
-            transition: opacity 1.2s cubic-bezier(0.4,0,0.2,1);
-            image-rendering: crisp-edges; /* sharpness hint */
-        }
-        #globeViz {
-            position: absolute; top: 0; left: 0;
-            width: 100vw; height: 100vh; z-index: 2;
-            transition: opacity 1.2s cubic-bezier(0.4,0,0.2,1);
-        }
-
-        /* Perf badge */
-        #perf-badge {
-            position: absolute; bottom: 14px; left: 14px; z-index: 20;
-            font-size: 10px; color: var(--text-dim);
-            font-family: 'JetBrains Mono', monospace;
-            background: var(--bg-panel); border: 1px solid #1e2a38;
-            padding: 4px 9px; border-radius: 4px;
-        }
-        #perf-badge span { color: var(--green); }
+        .type-badge { display: inline-block; padding: 2px 4px; background: #333; border-radius: 3px; font-size: 10px; margin-right: 5px; color: #aaa; }
+        
+        #canvas2d { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        #globeViz { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2; transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
 <body>
-    <button id="btn-show-ui" onclick="toggleUI()" title="Open Panel">⚙️</button>
-
+    <button id="btn-show-ui" onclick="toggleUI()" title="展开面板">⚙️</button>
+    
     <div id="ui">
-        <button class="min-btn" onclick="toggleUI()" title="Collapse">✕</button>
-        <h3 id="ui-title">GEO-INTELLIGENCE PRO</h3>
-
+        <button class="min-btn" onclick="toggleUI()" title="收起控制面板">✕</button>
+        <h3 id="ui-title">空间数据可视化</h3>
         <div class="flex">
             <button id="b-zh" class="active" onclick="switchLang('zh')">中文</button>
             <button id="b-en" onclick="switchLang('en')">EN</button>
         </div>
-
+        
         <div class="group">
-            <label id="l-search">节点搜索 / Node Search</label>
-            <input type="text" id="src" placeholder="输入 纽约, PVG, New York…"
-                   autocomplete="off" oninput="debounceSearch()"
-                   onblur="hideSuggestions()" onkeydown="if(event.keyCode==13)goFirst()">
+            <label id="l-search">节点搜索</label>
+            <input type="text" id="src" placeholder="输入 纽约, new york, pvg..." autocomplete="off" oninput="debounceSearch()" onblur="hideSuggestions()" onkeydown="if(event.keyCode==13)goFirst()">
             <div id="sugg-box"></div>
         </div>
 
-        <div class="group">
-            <label id="l-file">导入航线数据 (.csv)</label>
-            <input type="file" id="fIn" accept=".csv">
-        </div>
+        <div class="group"><label id="l-file">导入航线数据 (.csv)</label><input type="file" id="fIn" accept=".csv"></div>
 
         <div class="group">
-            <label id="l-theme">地图主题 / Theme</label>
+            <label id="l-theme">地图主题</label>
             <select id="gTheme" onchange="changeTheme()">
                 <option value="color" selected>卫星遥感 (Color)</option>
                 <option value="dark">暗色流向 (Dark)</option>
@@ -182,514 +73,339 @@
         </div>
 
         <div class="group">
-            <label id="l-view">图层控制 / Layers</label>
+            <label id="l-view">图层控制</label>
             <select id="vMode" onchange="renderLayers()">
                 <option value="all">显示全部</option>
                 <option value="arc">仅显示航线</option>
                 <option value="hub">仅显示机场</option>
             </select>
         </div>
-
+        
         <div class="group">
-            <label id="l-rotate">自转速度 / Rotation</label>
+            <label id="l-rotate">自转速度</label>
             <select id="rSpeed" onchange="setRotation()">
-                <option value="0" selected>静止 (Idle)</option>
-                <option value="4.0">快速 (Fast)</option>
-                <option value="1.0">慢速 (Slow)</option>
+                <option value="0" selected>静止 - 默认</option>
+                <option value="4.0">快速</option>
+                <option value="1.0">慢速</option>
             </select>
         </div>
 
-        <div class="group">
-            <label>渲染质量 / Render Quality</label>
-            <select id="pixRatio" onchange="applyPixelRatio()">
-                <option value="auto" selected>自适应 (Auto)</option>
-                <option value="1">性能优先 (1×)</option>
-                <option value="2">高清 (2×)</option>
-                <option value="3">极清 (3×)</option>
-            </select>
-        </div>
-
-        <div class="flex" style="margin-top:14px;">
-            <button onclick="exportSnapshot('3d')">📸 3D PNG</button>
-            <button onclick="exportSnapshot('2d')">📸 2D PNG</button>
+        <div class="flex" style="margin-top: 15px;">
+            <button onclick="exportSnapshot(false)">📸 3D 截图</button>
+            <button onclick="exportSnapshot(true)">📸 2D 截图</button>
         </div>
         <div class="flex">
-            <button onclick="clearAll()" style="color:#ff5555;border-color:#3a1820;">清除数据</button>
+            <button onclick="clearAll()" style="color:#ff5555; border-color:#422;">清除数据</button>
         </div>
-        <div id="sys-msg">内核启动中…</div>
+        <div id="sys-msg">内核启动中...</div>
     </div>
-
-    <div id="perf-badge">FPS <span id="fps-val">--</span> | ARC <span id="arc-val">0</span></div>
-
+    
     <canvas id="canvas2d"></canvas>
     <div id="globeViz"></div>
 
     <script>
-    // ─── FPS Counter (replaces Stats.js DOM clutter) ────────────────────────
-    let _fpsFrames = 0, _fpsLast = performance.now();
-    function tickFPS() {
-        _fpsFrames++;
-        const now = performance.now();
-        if (now - _fpsLast >= 1000) {
-            document.getElementById('fps-val').textContent = _fpsFrames;
-            _fpsFrames = 0; _fpsLast = now;
+        const statsObj = new Stats();
+        statsObj.showPanel(0);
+        statsObj.dom.style.position = 'absolute'; statsObj.dom.style.left = '15px'; statsObj.dom.style.top = '15px'; statsObj.dom.style.transform = 'scale(1.2)';
+        statsObj.dom.style.zIndex = '100';
+        document.body.appendChild(statsObj.dom);
+        function animate() { statsObj.update(); requestAnimationFrame(animate); } requestAnimationFrame(animate);
+
+        let db = {}, provs = [], lang = 'zh', curTheme = 'color', is2DMode = false;
+        let largeCities = [], allCities = [], isAirportsOK = false, isProvsOK = false;
+        let cLabelState = -1, cPolyState = -1; 
+        
+        let hasData = false; 
+
+        let rawArcs = [], rawHubs = [], renderArcs = [], renderHubs = [];
+
+        const dict = { zh: { title: "空间数据可视化", sLabel: "解析中..." }, en: { title: "Spatial Visualization", sLabel: "Parsing..." } };
+        
+        const T = {
+            color: { img: './earth-color.jpg', arcN: '#00ffff', arcH: '#ff0055', pFill: 'rgba(255,255,255,0.08)', pStrk: 'rgba(255,255,255,0.6)', bg: 'rgba(0,0,0,0.7)', text: '#fff', border: 'transparent', atmos: '#3a80df', mapBg: '#051329' },
+            dark:  { img: './earth-dark.jpg',  arcN: '#00ff88', arcH: '#ff0055', pFill: 'rgba(0,255,136,0.02)',  pStrk: 'rgba(68,68,68,0.8)', bg: 'rgba(0,0,0,0.8)', text: '#00ff88', border: '#00ff88', atmos: '#00ff88', mapBg: '#020202' }
+        };
+
+        const img2DColor = new Image(); img2DColor.src = T.color.img;
+        const img2DDark = new Image(); img2DDark.src = T.dark.img;
+
+        const normalizeStr = str => (str || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
+        function msg(text, color="#ffb86c") { document.getElementById('sys-msg').innerHTML = `<span style="color:${color}">${text}</span>`; }
+
+        // ==========================================
+        // 面板折叠逻辑交互
+        // ==========================================
+        function toggleUI() {
+            const ui = document.getElementById('ui');
+            ui.classList.toggle('collapsed');
         }
-        requestAnimationFrame(tickFPS);
-    }
-    requestAnimationFrame(tickFPS);
 
-    // ─── State ───────────────────────────────────────────────────────────────
-    let db = {}, provs = [], lang = 'zh', curTheme = 'color', is2DMode = false;
-    let largeCities = [], allCities = [], isAirportsOK = false, isProvsOK = false;
-    let cLabelState = -1, cPolyState = -1;
-    let hasData = false;
-    let rawArcs = [], rawHubs = [], renderArcs = [], renderHubs = [];
-    let _2dDirty = false, _2dRAF = null;  // 2D canvas dirty-flag throttle
+        // ==========================================
+        // 3D WebGL 引擎配置
+        // ==========================================
+        const world = Globe({ rendererConfig: { antialias: true, alpha: true, preserveDrawingBuffer: true } })(document.getElementById('globeViz'));
 
-    const dict = {
-        zh: { title: "空间数据可视化", sLabel: "解析中…" },
-        en: { title: "Spatial Visualization", sLabel: "Parsing…" }
-    };
-
-    // ─── Theme palette ───────────────────────────────────────────────────────
-    const T = {
-        color: {
-            img: './earth-color.jpg',
-            arcN: '#00e5ff', arcH: '#ff2255',
-            pFill: 'rgba(255,255,255,0.07)', pStrk: 'rgba(255,255,255,0.55)',
-            bg: 'rgba(0,5,20,0.75)', text: '#fff', border: 'transparent',
-            atmos: '#3a80df', mapBg: '#040d1f'
-        },
-        dark: {
-            img: './earth-dark.jpg',
-            arcN: '#00ff88', arcH: '#ff2255',
-            pFill: 'rgba(0,255,136,0.02)', pStrk: 'rgba(60,60,60,0.8)',
-            bg: 'rgba(0,0,0,0.85)', text: '#00ff88', border: '#00ff88',
-            atmos: '#00ff88', mapBg: '#010101'
-        }
-    };
-
-    // Preload 2D background images
-    const img2DColor = new Image(); img2DColor.src = T.color.img;
-    const img2DDark  = new Image(); img2DDark.src  = T.dark.img;
-
-    const normalizeStr = str => (str || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
-    function msg(text, color = '#f0a050') {
-        document.getElementById('sys-msg').innerHTML = `<span style="color:${color}">${text}</span>`;
-    }
-
-    // ─── Panel toggle ────────────────────────────────────────────────────────
-    function toggleUI() { document.getElementById('ui').classList.toggle('collapsed'); }
-
-    // ─── 3D Globe engine ────────────────────────────────────────────────────
-    // FIX 1: Use devicePixelRatio capped at 2 by default for balance of clarity & perf
-    const _dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-    const world = Globe({
-        rendererConfig: {
-            antialias: true,
-            alpha: true,
-            preserveDrawingBuffer: true,  // needed for PNG export
-            powerPreference: 'high-performance'   // FIX 2: request discrete GPU
-        }
-    })(document.getElementById('globeViz'));
-
-    // FIX 3: Crisp pixel ratio on the WebGL canvas
-    world.renderer().setPixelRatio(_dpr);
-
-    world
-        .globeImageUrl(T[curTheme].img)
-        .bumpImageUrl('./earth-topology.png')
-        .pointOfView({ alt: 2.5 })
-        .showAtmosphere(true)
-        .atmosphereColor(T[curTheme].atmos)
-        .atmosphereAltitude(0.15);
-
-    // FIX 4: labelResolution 8 → much sharper IATA text
-    world
-        .labelLat(d => d.lt).labelLng(d => d.lg).labelText(d => d.iata)
-        .labelResolution(8)
-        .labelDotRadius(d => {
-            const base = d.isLarge ? 0.22 : 0.13;
-            return base + Math.min((d.v || 0) * 0.04, 0.55);
-        })
-        .labelColor(d => {
-            const a = Math.min(0.45 + ((d.v || 0) * 0.14), 1.0);
-            return `rgba(220,232,240,${a})`;
+        world.globeImageUrl(T[curTheme].img).bumpImageUrl('./earth-topology.png').pointOfView({ alt: 2.5 });
+        world.showAtmosphere(true).atmosphereColor(T[curTheme].atmos).atmosphereAltitude(0.15);
+        
+        world.labelLat(d => d.lt).labelLng(d => d.lg).labelText(d => d.iata);
+        world.labelDotRadius(d => {
+            const base = d.isLarge ? 0.20 : 0.12; 
+            return base + Math.min(d.v * 0.05, 0.6); 
         });
-
-    // FIX 5: Arc quality — higher altitude steps = smoother curves
-    world
-        .arcStroke(d => {
-            const w = d.weight || 1;
-            return Math.min(0.3 + w * 0.04, 2.5);   // thinner base = less overdraw
-        })
-        .arcColor(d => d.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN)
-        .arcAltitudeAutoScale(0.3)          // FIX 6: auto arc height → less clipping
-        .arcDashLength(0.4)                 // FIX 7: animated dashes for visual clarity
-        .arcDashGap(0.2)
-        .arcDashAnimateTime(3000);          // smooth flowing dash animation
-
-    world
-        .polygonCapColor(() => T[curTheme].pFill)
-        .polygonStrokeColor(() => T[curTheme].pStrk)
-        .polygonLabel(d =>
-            `<div style="background:${T[curTheme].bg};padding:5px 8px;border-radius:5px;
-             color:${T[curTheme].text};border:1px solid ${T[curTheme].border};
-             font-family:'JetBrains Mono',monospace;font-size:12px;">
-             <b>${lang==='zh' ? (d.properties.name_zh || d.properties.name) : d.properties.name}</b>
-             </div>`
-        );
-
-    window.addEventListener('resize', () => {
-        world.width(window.innerWidth).height(window.innerHeight);
-        if (is2DMode) schedule2DDraw();
-    });
-
-    // ─── 2D Canvas — FIX 8: HiDPI-aware, batched, RAF-throttled ────────────
-    function schedule2DDraw() {
-        if (_2dRAF) return;
-        _2dRAF = requestAnimationFrame(() => { _2dRAF = null; draw2DCanvas(); });
-    }
-
-    function draw2DCanvas() {
-        const canvas = document.getElementById('canvas2d');
-        // FIX 9: match canvas internal size to physical pixels (retina-sharp)
-        const dpr = window.devicePixelRatio || 1;
-        const cssW = window.innerWidth, cssH = window.innerHeight;
-        if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
-            canvas.width  = cssW * dpr;
-            canvas.height = cssH * dpr;
-            canvas.style.width  = cssW + 'px';
-            canvas.style.height = cssH + 'px';
-        }
-
-        const ctx = canvas.getContext('2d');
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);  // scale all drawing by DPR
-
-        ctx.fillStyle = T[curTheme].mapBg;
-        ctx.fillRect(0, 0, cssW, cssH);
-
-        const mapW = cssW, mapH = cssW / 2;
-        const offsetX = 0, offsetY = (cssH - mapH) / 2;
-
-        const bgImg = curTheme === 'color' ? img2DColor : img2DDark;
-        if (bgImg.complete && bgImg.naturalWidth) {
-            // FIX 10: smooth bicubic upscaling
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(bgImg, offsetX, offsetY, mapW, mapH);
-        }
-
-        ctx.fillStyle = curTheme === 'color' ? 'rgba(0,5,20,0.12)' : 'rgba(0,0,0,0.5)';
-        ctx.fillRect(offsetX, offsetY, mapW, mapH);
-
-        const getX = lng => offsetX + (lng + 180) * (mapW / 360);
-        const getY = lat => offsetY + (90 - lat) * (mapH / 180);
-
-        const v = document.getElementById('vMode').value;
-
-        // FIX 11: batch arcs by color group to minimise ctx state switches
-        if (v !== 'hub') {
-            const normal = [], hot = [];
-            renderArcs.forEach(arc => (arc.weight > 100 ? hot : normal).push(arc));
-
-            [
-                { list: normal, color: T[curTheme].arcN },
-                { list: hot,    color: T[curTheme].arcH }
-            ].forEach(({ list, color }) => {
-                if (!list.length) return;
-                // FIX 12: glow pass (wide, low-alpha stroke beneath)
-                ctx.save();
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 2.5;
-                ctx.globalAlpha = 0.12;
-                ctx.shadowColor = color;
-                ctx.shadowBlur = 8;
-                list.forEach(arc => {
-                    ctx.beginPath();
-                    ctx.moveTo(getX(arc.startLng), getY(arc.startLat));
-                    ctx.lineTo(getX(arc.endLng),   getY(arc.endLat));
-                    ctx.stroke();
-                });
-                ctx.restore();
-
-                // Sharp crisp pass
-                ctx.save();
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 1;
-                ctx.shadowBlur = 0;
-                list.forEach(arc => {
-                    const a = Math.min(0.25 + (arc.weight || 1) * 0.04, 0.92);
-                    ctx.globalAlpha = a;
-                    ctx.beginPath();
-                    ctx.moveTo(getX(arc.startLng), getY(arc.startLat));
-                    ctx.lineTo(getX(arc.endLng),   getY(arc.endLat));
-                    ctx.stroke();
-                });
-                ctx.restore();
-            });
-        }
-
-        // Hubs
-        if (v !== 'arc') {
-            renderHubs.forEach(hub => {
-                const x = getX(hub.lg), y = getY(hub.lt);
-                const radius = Math.max(2.5, 2.5 + Math.min((hub.v || 0) * 1.2, 7));
-                const a = Math.min(0.45 + (hub.v || 0) * 0.13, 1.0);
-
-                // Glow halo
-                const grad = ctx.createRadialGradient(x, y, 0, x, y, radius * 2.2);
-                grad.addColorStop(0, `rgba(220,232,240,${a})`);
-                grad.addColorStop(1, 'rgba(0,0,0,0)');
-                ctx.beginPath();
-                ctx.fillStyle = grad;
-                ctx.globalAlpha = 1;
-                ctx.arc(x, y, radius * 2.2, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Core dot
-                ctx.beginPath();
-                ctx.fillStyle = `rgba(255,255,255,${a})`;
-                ctx.arc(x, y, radius, 0, Math.PI * 2);
-                ctx.fill();
-            });
-        }
-        ctx.globalAlpha = 1;
-    }
-
-    // ─── Projection toggle ───────────────────────────────────────────────────
-    function toggleProjection() {
-        is2DMode = !is2DMode;
-        const c = document.getElementById('canvas2d');
-        const g = document.getElementById('globeViz');
-        const btn = document.getElementById('btnProj');
-        if (is2DMode) {
-            schedule2DDraw();
-            c.style.opacity = 1; c.style.pointerEvents = 'auto';
-            g.style.opacity = 0; g.style.pointerEvents = 'none';
-            btn.innerText = '▤ 恢复 3D 视图';
-        } else {
-            c.style.opacity = 0; c.style.pointerEvents = 'none';
-            g.style.opacity = 1; g.style.pointerEvents = 'auto';
-            btn.innerText = '▤ 切换为 2D 展开图';
-        }
-    }
-
-    // ─── Theme ───────────────────────────────────────────────────────────────
-    function changeTheme() {
-        curTheme = document.getElementById('gTheme').value;
-        world.globeImageUrl(T[curTheme].img).atmosphereColor(T[curTheme].atmos);
+        world.labelColor(d => {
+            const alpha = Math.min(0.4 + (d.v * 0.15), 1.0); 
+            return `rgba(255, 255, 255, ${alpha})`;
+        });
+        world.labelResolution(4); 
+        
+        world.arcStroke(d => Math.min(d.weight * 0.05, 2.0));
         world.arcColor(d => d.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN);
+        
         world.polygonCapColor(() => T[curTheme].pFill).polygonStrokeColor(() => T[curTheme].pStrk);
-        if (isProvsOK) { cPolyState = -1; upd(); }
-        if (is2DMode) schedule2DDraw();
-    }
+        world.polygonLabel(d => `<div style="background:${T[curTheme].bg}; padding:4px; border-radius:4px; color:${T[curTheme].text}; border:1px solid ${T[curTheme].border};"><b>${lang==='zh'?(d.properties.name_zh||d.properties.name):d.properties.name}</b></div>`);
+        world.renderer().setPixelRatio(window.devicePixelRatio); 
 
-    // ─── Pixel ratio selector ────────────────────────────────────────────────
-    function applyPixelRatio() {
-        const sel = document.getElementById('pixRatio').value;
-        const dpr = sel === 'auto' ? Math.min(window.devicePixelRatio || 1, 2) : parseFloat(sel);
-        world.renderer().setPixelRatio(dpr);
-        msg(`渲染倍率已设置为 ${dpr}×`, '#00e5ff');
-    }
+        window.addEventListener('resize', () => { 
+            world.width(window.innerWidth).height(window.innerHeight); 
+            if(is2DMode) draw2DCanvas(); 
+        });
 
-    // ─── LOD / zoom ─────────────────────────────────────────────────────────
-    function upd() {
-        const alt = world.pointOfView().alt;
-        if (isAirportsOK && !is2DMode) {
-            if (hasData) {
-                if (cLabelState !== 'data_locked') {
-                    cLabelState = 'data_locked';
-                    const v = document.getElementById('vMode').value;
-                    world.labelsData(v === 'arc' ? [] : renderHubs);
-                    world.labelSize(0.18);
-                }
+        // ==========================================
+        // 2D Canvas 高清物理贴图渲染引擎
+        // ==========================================
+        function draw2DCanvas() {
+            const canvas = document.getElementById('canvas2d');
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = T[curTheme].mapBg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const mapW = canvas.width; const mapH = mapW / 2;
+            const offsetX = 0; const offsetY = (canvas.height - mapH) / 2;
+            
+            const bgImg = curTheme === 'color' ? img2DColor : img2DDark;
+            if (bgImg.complete && bgImg.naturalWidth !== 0) {
+                ctx.drawImage(bgImg, offsetX, offsetY, mapW, mapH);
+            }
+            
+            ctx.fillStyle = curTheme === 'color' ? 'rgba(0, 5, 20, 0.15)' : 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(offsetX, offsetY, mapW, mapH);
+
+            const getX = lng => offsetX + (lng + 180) * (mapW / 360);
+            const getY = lat => offsetY + (90 - lat) * (mapH / 180);
+
+            const v = document.getElementById('vMode').value;
+            if(v !== 'hub') {
+                ctx.lineWidth = 1;
+                renderArcs.forEach(arc => {
+                    ctx.beginPath();
+                    ctx.strokeStyle = arc.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN;
+                    ctx.globalAlpha = Math.min(0.3 + arc.weight * 0.05, 1.0);
+                    ctx.moveTo(getX(arc.startLng), getY(arc.startLat));
+                    ctx.lineTo(getX(arc.endLng), getY(arc.endLat));
+                    ctx.stroke();
+                });
+            }
+
+            if(v !== 'arc') {
+                renderHubs.forEach(hub => {
+                    ctx.beginPath();
+                    const alpha = Math.min(0.4 + (hub.v * 0.15), 1.0);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                    const radius = Math.max(2.5, 2.5 + Math.min(hub.v * 1.5, 6)); 
+                    ctx.arc(getX(hub.lg), getY(hub.lt), radius, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        function toggleProjection() {
+            is2DMode = !is2DMode;
+            const c = document.getElementById('canvas2d'), g = document.getElementById('globeViz'), btn = document.getElementById('btnProj');
+            if (is2DMode) {
+                draw2DCanvas();
+                c.style.opacity = 1; c.style.pointerEvents = 'auto';
+                g.style.opacity = 0; g.style.pointerEvents = 'none';
+                btn.innerText = "▤ 恢复 3D 视图";
             } else {
-                let tLabel = alt > 1.5 ? 0 : (alt > 0.6 ? 1 : 2);
-                if (tLabel !== cLabelState) {
-                    cLabelState = tLabel;
-                    const d = tLabel === 0 ? [] : (tLabel === 1 ? largeCities : allCities);
-                    world.labelsData(d);
-                    world.labelSize(tLabel === 1 ? 0.22 : 0.13);
+                c.style.opacity = 0; c.style.pointerEvents = 'none';
+                g.style.opacity = 1; g.style.pointerEvents = 'auto';
+                btn.innerText = "▤ 切换为 2D 展开图";
+            }
+        }
+
+        // ==========================================
+        // 核心逻辑与数据处理
+        // ==========================================
+        function changeTheme() {
+            curTheme = document.getElementById('gTheme').value;
+            world.globeImageUrl(T[curTheme].img).atmosphereColor(T[curTheme].atmos); 
+            world.arcColor(d => d.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN);
+            world.polygonCapColor(() => T[curTheme].pFill).polygonStrokeColor(() => T[curTheme].pStrk);
+            if (isProvsOK) { cPolyState = -1; world.polygonLabel(world.polygonLabel()); upd(); }
+            if(is2DMode) draw2DCanvas();
+        }
+
+        async function init() {
+            Papa.parse("./optimized_airports.csv", {
+                download: true, header: true, skipEmptyLines: true, fastMode: true,
+                complete: r => {
+                    r.data.forEach(x => { 
+                        if(x.iata_code && (x.type === 'large_airport' || x.type === 'medium_airport')) { 
+                            const item = { iata: x.iata_code.toUpperCase(), n: x.name, lt: +x.latitude_deg, lg: +x.longitude_deg, isLarge: x.type === 'large_airport', v: 0 };
+                            db[item.iata] = item; allCities.push(item);
+                            if(item.isLarge) largeCities.push(item);
+                        } 
+                    });
+                    renderHubs = allCities; 
+                    world.labelsData(renderHubs);
+                    isAirportsOK = true; upd(); 
+                }
+            });
+
+            fetch("./provinces.json").then(res => res.json()).then(tj => {
+                provs = (tj.type === "Topology") ? topojson.feature(tj, tj.objects[Object.keys(tj.objects)[0]]).features : tj.features;
+                isProvsOK = true; upd(); 
+            }).catch(()=>console.log('No provinces.json'));
+        }
+
+        function upd() {
+            const alt = world.pointOfView().alt;
+            if (isAirportsOK && !is2DMode) {
+                if (hasData) {
+                    if (cLabelState !== 'data_locked') {
+                        cLabelState = 'data_locked';
+                        const v = document.getElementById('vMode').value;
+                        world.labelsData(v==='arc' ? [] : renderHubs);
+                        world.labelSize(0.18); 
+                    }
+                } else {
+                    let tLabel = alt > 1.5 ? 0 : (alt > 0.6 ? 1 : 2);
+                    if (tLabel !== cLabelState) {
+                        cLabelState = tLabel;
+                        const displayData = tLabel === 0 ? [] : (tLabel === 1 ? largeCities : allCities);
+                        world.labelsData(displayData);
+                        world.labelSize(tLabel === 1 ? 0.20 : 0.12); 
+                    }
+                }
+            }
+            if (isProvsOK && !is2DMode) {
+                let tPoly = alt < 1.6 ? 1 : 0;
+                if (tPoly !== cPolyState) {
+                    cPolyState = tPoly;
+                    world.polygonsData(tPoly === 1 ? provs : []);
                 }
             }
         }
-        if (isProvsOK && !is2DMode) {
-            let tPoly = alt < 1.6 ? 1 : 0;
-            if (tPoly !== cPolyState) {
-                cPolyState = tPoly;
-                world.polygonsData(tPoly === 1 ? provs : []);
-            }
+
+        document.getElementById('fIn').onchange = e => {
+            const file = e.target.files[0]; if (!file) return;
+            msg(dict[lang].sLabel, "#00ffff");
+            
+            Papa.parse(file, {
+                header: true, skipEmptyLines: true, fastMode: true,
+                complete: function(r) {
+                    const arcs = []; const hubs = new Map();
+                    r.data.forEach(row => {
+                        const o_code = (row.origin_iata || row.origin || '').trim().toUpperCase();
+                        const d_code = (row.dest_iata || row.dest || '').trim().toUpperCase();
+                        
+                        const origin = db[o_code], dest = db[d_code];
+                        const weight = parseInt(row.weight) || 1; 
+                        
+                        if (origin && dest) {
+                            arcs.push({ startLat: origin.lt, startLng: origin.lg, endLat: dest.lt, endLng: dest.lg, weight: weight });
+                            if(!hubs.has(origin.iata)) hubs.set(origin.iata, {iata: origin.iata, v:0});
+                            if(!hubs.has(dest.iata)) hubs.set(dest.iata, {iata: dest.iata, v:0});
+                            hubs.get(origin.iata).v += weight; hubs.get(dest.iata).v += weight;
+                        }
+                    });
+                    rawArcs = arcs; 
+                    rawHubs = Array.from(hubs.values());
+                    hasData = true; 
+                    
+                    applyDataMapping(); 
+                    msg(`✅ 解析完成: 获取 ${rawArcs.length} 条航线并自动隐去无关节点。`);
+                },
+                error: function(err) { msg(`解析错误 - ${err.message}`, "red"); }
+            });
+        };
+
+        function applyDataMapping() {
+            renderArcs = rawArcs; // 直接应用所有解析到的航线
+            allCities.forEach(c => c.v = 0);
+            
+            const activeNodes = [];
+            rawHubs.forEach(h => { 
+                if (db[h.iata] && h.v >= 1) { // 仅渲染有效连通节点
+                    db[h.iata].v = h.v; 
+                    activeNodes.push(db[h.iata]);
+                }
+            });
+            renderHubs = activeNodes; 
+            
+            cLabelState = -1; 
+            renderLayers();
         }
-    }
 
-    // ─── CSV loader ─────────────────────────────────────────────────────────
-    document.getElementById('fIn').onchange = e => {
-        const file = e.target.files[0]; if (!file) return;
-        msg(dict[lang].sLabel, '#00e5ff');
-        Papa.parse(file, {
-            header: true, skipEmptyLines: true, fastMode: true,
-            worker: true,   // FIX 13: parse on a Web Worker → main thread stays responsive
-            complete(r) {
-                const arcs = []; const hubs = new Map();
-                r.data.forEach(row => {
-                    const o = (row.origin_iata || row.origin || '').trim().toUpperCase();
-                    const d = (row.dest_iata   || row.dest   || '').trim().toUpperCase();
-                    const origin = db[o], dest = db[d];
-                    const weight = parseInt(row.weight) || 1;
-                    if (origin && dest) {
-                        arcs.push({ startLat: origin.lt, startLng: origin.lg, endLat: dest.lt, endLng: dest.lg, weight });
-                        if (!hubs.has(o)) hubs.set(o, { iata: o, v: 0 });
-                        if (!hubs.has(d)) hubs.set(d, { iata: d, v: 0 });
-                        hubs.get(o).v += weight; hubs.get(d).v += weight;
-                    }
-                });
-                rawArcs = arcs; rawHubs = Array.from(hubs.values());
-                hasData = true;
-                document.getElementById('arc-val').textContent = rawArcs.length;
-                applyDataMapping();
-                msg(`✅ 解析完成: ${rawArcs.length} 条航线 / ${rawHubs.size || rawHubs.length} 节点`, '#00ff88');
-            },
-            error(err) { msg(`解析错误 — ${err.message}`, '#ff2255'); }
-        });
-    };
-
-    function applyDataMapping() {
-        renderArcs = rawArcs;
-        allCities.forEach(c => c.v = 0);
-        const activeNodes = [];
-        rawHubs.forEach(h => {
-            if (db[h.iata] && h.v >= 1) {
-                db[h.iata].v = h.v;
-                activeNodes.push(db[h.iata]);
+        function renderLayers() {
+            const v = document.getElementById('vMode').value;
+            world.arcsData(v==='hub'?[]:renderArcs);
+            
+            if (hasData) {
+                world.labelsData(v==='arc' ? [] : renderHubs);
+            } else {
+                cLabelState = -1;
+                upd();
             }
-        });
-        renderHubs = activeNodes;
-        cLabelState = -1;
-        renderLayers();
-    }
 
-    function renderLayers() {
-        const v = document.getElementById('vMode').value;
-        world.arcsData(v === 'hub' ? [] : renderArcs);
-        if (hasData) {
-            world.labelsData(v === 'arc' ? [] : renderHubs);
-        } else { cLabelState = -1; upd(); }
-        if (is2DMode) schedule2DDraw();
-    }
-
-    function clearAll() {
-        rawArcs = []; rawHubs = []; renderArcs = [];
-        allCities.forEach(c => c.v = 0);
-        renderHubs = allCities; hasData = false;
-        document.getElementById('fIn').value = '';
-        document.getElementById('arc-val').textContent = '0';
-        cLabelState = -1; renderLayers();
-        msg('数据已清除，恢复基础节点显示。');
-    }
-
-    // ─── FIX 14: Export as PNG (lossless) instead of JPEG ───────────────────
-    function exportSnapshot(mode) {
-        const a = document.createElement('a');
-        if (mode === '2d') {
-            draw2DCanvas();
-            a.href = document.getElementById('canvas2d').toDataURL('image/png');
-            a.download = `Map_2D_${Date.now()}.png`;
-        } else {
-            world.renderer().render(world.scene(), world.camera());
-            a.href = world.renderer().domElement.toDataURL('image/png');
-            a.download = `Globe_3D_${Date.now()}.png`;
+            if (v !== 'arc') {
+                world.labelColor(world.labelColor());
+                world.labelDotRadius(world.labelDotRadius());
+            }
+            if(is2DMode) draw2DCanvas();
         }
-        a.click();
-        msg('📸 图像已导出为无损 PNG', '#00ff88');
-    }
 
-    // ─── Rotation ────────────────────────────────────────────────────────────
-    function setRotation() {
-        const val = parseFloat(document.getElementById('rSpeed').value);
-        world.controls().autoRotate = val > 0;
-        if (val > 0) world.controls().autoRotateSpeed = val;
-    }
+        function clearAll() { 
+            rawArcs=[]; rawHubs=[]; renderArcs=[]; 
+            allCities.forEach(c => c.v = 0); 
+            renderHubs = allCities;
+            hasData = false; 
+            
+            document.getElementById('fIn').value=''; 
+            cLabelState = -1; 
+            renderLayers(); 
+            msg("数据已清除并恢复基础节点显示。"); 
+        }
 
-    // ─── Language ────────────────────────────────────────────────────────────
-    function switchLang(l) {
-        lang = l;
-        ['zh','en'].forEach(k => document.getElementById(`b-${k}`).className = l===k ? 'active' : '');
-        document.getElementById('ui-title').innerText =
-            l === 'zh' ? 'GEO-INTELLIGENCE PRO' : 'GEO-INTELLIGENCE PRO';
-    }
-
-    // ─── Autocomplete search ─────────────────────────────────────────────────
-    let _searchTimer = null;
-    function debounceSearch() {
-        clearTimeout(_searchTimer);
-        _searchTimer = setTimeout(doSearch, 120);
-    }
-    function doSearch() {
-        const q = normalizeStr(document.getElementById('src').value);
-        if (q.length < 1) { hideSuggestions(); return; }
-        const results = allCities.filter(c =>
-            normalizeStr(c.iata).includes(q) || normalizeStr(c.n).includes(q)
-        ).slice(0, 12);
-        const box = document.getElementById('sugg-box');
-        if (!results.length) { box.style.display = 'none'; return; }
-        box.innerHTML = results.map(c => {
-            const badge = `<span class="type-badge">${c.isLarge ? 'LARGE' : 'MED'}</span>`;
-            const hl = s => s.replace(new RegExp(`(${q})`, 'gi'), '<span class="match-hl">$1</span>');
-            return `<div class="sugg-item" onmousedown="flyTo('${c.iata}')">${badge}${hl(c.iata)} — ${hl(c.n)}</div>`;
-        }).join('');
-        box.style.display = 'block';
-    }
-    function hideSuggestions() { setTimeout(() => { document.getElementById('sugg-box').style.display='none'; }, 200); }
-    function goFirst() {
-        const first = document.querySelector('.sugg-item');
-        if (first) first.dispatchEvent(new MouseEvent('mousedown'));
-    }
-    function flyTo(iata) {
-        const c = db[iata]; if (!c) return;
-        world.pointOfView({ lat: c.lt, lng: c.lg, alt: 0.5 }, 1200);
-        hideSuggestions();
-        document.getElementById('src').value = '';
-    }
-
-    // ─── Init (fetch airport data) ───────────────────────────────────────────
-    async function init() {
-        Papa.parse('./optimized_airports.csv', {
-            download: true, header: true, skipEmptyLines: true, fastMode: true,
-            complete(r) {
-                r.data.forEach(x => {
-                    if (x.iata_code && (x.type === 'large_airport' || x.type === 'medium_airport')) {
-                        const item = {
-                            iata: x.iata_code.toUpperCase(), n: x.name,
-                            lt: +x.latitude_deg, lg: +x.longitude_deg,
-                            isLarge: x.type === 'large_airport', v: 0
-                        };
-                        db[item.iata] = item; allCities.push(item);
-                        if (item.isLarge) largeCities.push(item);
-                    }
-                });
-                renderHubs = allCities;
-                world.labelsData(renderHubs);
-                isAirportsOK = true; upd();
-                msg('✅ 机场数据库就绪 | Airport DB ready', '#00ff88');
+        function exportSnapshot(capture2D) { 
+            const a = document.createElement('a');
+            if (capture2D) {
+                draw2DCanvas();
+                a.href = document.getElementById('canvas2d').toDataURL('image/jpeg', 1.0);
+                a.download = `Map_2D_${Date.now()}.jpg`;
+            } else {
+                world.renderer().render(world.scene(), world.camera()); 
+                a.href = world.renderer().domElement.toDataURL('image/jpeg', 1.0); 
+                a.download = `Globe_3D_${Date.now()}.jpg`;
             }
-        });
+            a.click(); 
+        }
 
-        fetch('./provinces.json')
-            .then(r => r.json())
-            .then(tj => {
-                provs = (tj.type === 'Topology')
-                    ? topojson.feature(tj, tj.objects[Object.keys(tj.objects)[0]]).features
-                    : tj.features;
-                isProvsOK = true; upd();
-            })
-            .catch(() => console.log('No provinces.json — skipping polygon layer'));
-    }
+        function setRotation() { const val = parseFloat(document.getElementById('rSpeed').value); world.controls().autoRotate = (val > 0); if (val > 0) world.controls().autoRotateSpeed = val; }
+        
+        function switchLang(l) {
+            lang = l;
+            ['zh', 'en'].forEach(k => document.getElementById(`b-${k}`).className = l===k?'active':'');
+            document.getElementById('ui-title').innerText = dict[l].title;
+            if (isProvsOK && !is2DMode) world.polygonLabel(world.polygonLabel()); 
+        }
 
-    world.onZoom(upd);
-    init();
-    setRotation();
+        world.onZoom(upd); 
+        init(); setRotation(); 
     </script>
 </body>
 </html>

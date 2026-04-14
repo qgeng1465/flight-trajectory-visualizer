@@ -1,31 +1,30 @@
 @echo off
-chcp 65001 >nul
 echo ========================================
-echo   [Debug 模式] 正在同步代码至 GitHub...
+echo  [Debug Mode] Syncing codebase to GitHub
 echo ========================================
 echo.
 
-:: 1. 强制进入项目绝对路径
+REM 1. Force directory change to absolute path
 cd /d D:\Flight-Tracker
 
-:: 2. 打印当前 Git 状态
-echo [*] 当前 Git 状态检查：
+REM 2. Print current Git status
+echo [*] Checking current Git status:
 git status
 echo.
 
-:: 3. 执行同步管线
-echo [*] 正在暂存变更...
+REM 3. Execute sync pipeline
+echo [*] Staging changes...
 git add .
 
-echo [*] 正在生成版本快照...
+echo [*] Generating version snapshot...
 git commit -m "Auto-sync: %date% %time%"
 
-echo [*] 正在推送至云端...
+echo [*] Pushing to cloud repository...
 git push
 
 echo.
 echo ========================================
-echo   执行管线结束。请检查上方是否有 error 提示。
+echo  Pipeline executed. Check for errors above.
 echo ========================================
-:: 强制暂停，等待用户手动关闭窗口，防止报错信息一闪而过
+REM Pause to keep the terminal window open
 pause
