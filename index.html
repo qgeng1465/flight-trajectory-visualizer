@@ -3,10 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <title>✈ 我的飞行足迹</title>
-    <script src="https://unpkg.com/globe.gl@2.25.3/dist/globe.gl.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/16/Stats.min.js"></script>
+    <!-- 优先加载本地内置库（离线可用），缺失时同步回退 CDN -->
+    <script src="libs/globe.gl.min.js"></script>
+    <script>window.Globe||document.write('<script src="https://unpkg.com/globe.gl@2.25.3/dist/globe.gl.min.js"><\/script>');</script>
+    <script src="libs/papaparse.min.js"></script>
+    <script>window.Papa||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"><\/script>');</script>
+    <script src="libs/topojson-client.min.js"></script>
+    <script>window.topojson||document.write('<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"><\/script>');</script>
+    <script src="libs/Stats.min.js"></script>
+    <script>window.Stats||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/16/Stats.min.js"><\/script>');</script>
 
     <style>
         body { margin: 0; background: #000; color: #eee; font-family: system-ui; overflow: hidden; }
@@ -206,11 +211,32 @@
         statsObj.dom.style.position = 'absolute'; statsObj.dom.style.right = '15px'; statsObj.dom.style.bottom = '15px'; statsObj.dom.style.transform = 'scale(1.2)';
         statsObj.dom.style.zIndex = '100';
         document.body.appendChild(statsObj.dom);
-        function animate() { statsObj.update(); requestAnimationFrame(animate); } requestAnimationFrame(animate);
+        // 轻量 rAF 循环：只跑 stats 与看门狗；真正昂贵的 globe.gl 内部渲染由 pauseAnimation 休眠
+        function animate() {
+            statsObj.update();
+            const now = performance.now();
+            // P1 看门狗：有活动才渲染，静止时暂停 globe.gl 内部渲染循环
+            const active = world.controls().autoRotate || replaying || selectedId !== null || now < renderUntil;
+            if (!active && !paused) { world.pauseAnimation(); paused = true; }
+            else if (active && paused) { world.resumeAnimation(); paused = false; }
+            // P2 自适应渲染像素比：仅在地球实际渲染时采样 FPS（贴图永远满分辨率）
+            if (!paused) {
+                _fpsFrames++;
+                if (now - _fpsLast >= 500) {
+                    const fps = _fpsFrames * 1000 / (now - _fpsLast);
+                    _fpsFrames = 0; _fpsLast = now;
+                    if (fps < 40) { _prLo++; _prHi = 0; if (_prLo >= 2 && currentPR > 0.75) { currentPR = Math.max(0.75, +(currentPR - 0.25).toFixed(2)); applyPR(); _prLo = 0; } }
+                    else if (fps > 57) { _prHi++; _prLo = 0; if (_prHi >= 2 && currentPR < TARGET_PR) { currentPR = Math.min(TARGET_PR, +(currentPR + 0.25).toFixed(2)); applyPR(); _prHi = 0; } }
+                    else { _prLo = 0; _prHi = 0; }
+                }
+            } else { _fpsFrames = 0; _fpsLast = now; }
+            requestAnimationFrame(animate);
+        }
+        requestAnimationFrame(animate);
 
         // ===== 全局状态 =====
         let db = {}, provs = [], lang = 'zh', curTheme = 'color', is2DMode = false;
-        let largeCities = [], allCities = [], isAirportsOK = false, isProvsOK = false;
+        let largeCities = [], allCities = [], idleCities = [], isAirportsOK = false, isProvsOK = false, provsLoading = false;
         let cLabelState = -1, cPolyState = -1;
         let hasData = false;
         let rawArcs = [], rawHubs = [], renderArcs = [], renderHubs = [];
@@ -223,6 +249,7 @@
         const LS_KEY = 'flightTracker.flights';
         const HL_COLOR = '#ffcc00';
         const DIM_COLOR = 'rgba(140,140,140,0.16)';
+        const MAX_IDLE_LABELS = 200; // P3：无飞行数据时标签数量封顶
 
         // ===== 多语言字典 =====
         const i18n = {
@@ -279,8 +306,16 @@
             dark:  { img: './earth-dark.jpg',  arcN: '#00ff88', arcH: '#ff0055', pFill: 'rgba(0,255,136,0.02)',  pStrk: 'rgba(68,68,68,0.8)', bg: 'rgba(0,0,0,0.8)', text: '#00ff88', border: '#00ff88', atmos: '#00ff88', mapBg: '#020202' }
         };
 
-        const img2DColor = new Image(); img2DColor.src = T.color.img;
-        const img2DDark = new Image(); img2DDark.src = T.dark.img;
+        // P4：2D 大图懒加载——启动不预载，首次进入 2D / 切换主题时才下载解码（贴图本身仍是原图）
+        const img2DColor = new Image(), img2DDark = new Image();
+        const img2DReq = { color: false, dark: false };
+        function ensure2DImage(theme) {
+            const img = theme === 'color' ? img2DColor : img2DDark;
+            if (img2DReq[theme]) return;
+            img2DReq[theme] = true;
+            img.onload = () => { if (is2DMode && curTheme === theme) draw2DCanvas(); };
+            img.src = T[theme].img;
+        }
 
         // ===== 工具函数 =====
         const normalizeStr = str => (str || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
@@ -356,7 +391,33 @@
         world.polygonStrokeColor(() => T[curTheme].pStrk);
         world.polygonLabel(d => `<div style="background:${T[curTheme].bg}; padding:4px; border-radius:4px; color:${T[curTheme].text}; border:1px solid ${T[curTheme].border};"><b>${lang === 'zh' ? (d.properties.name_zh || d.properties.name) : d.properties.name}</b></div>`);
 
-        world.renderer().setPixelRatio(window.devicePixelRatio);
+        // ===== P1/P2 渲染调度：按需渲染 + 自适应像素比 =====
+        let renderUntil = 0, paused = false;              // 按需渲染状态
+        const TARGET_PR = Math.min(window.devicePixelRatio || 1, 2); // 上限 2：视网膜无画质损失，只阻止 >2 倍浪费超采样
+        let currentPR = TARGET_PR;
+        let _fpsLast = performance.now(), _fpsFrames = 0, _prLo = 0, _prHi = 0;
+
+        function keepRendering(ms = 1500) {
+            renderUntil = Math.max(renderUntil, performance.now() + ms);
+            if (paused) { world.resumeAnimation(); paused = false; }
+        }
+        function applyPR() {
+            world.renderer().setPixelRatio(currentPR);
+            world.width(window.innerWidth);
+            world.height(window.innerHeight);
+        }
+        // 相机过渡包装：保证过渡动画期间渲染循环在线
+        function flyTo(pov, ms) { keepRendering((ms || 0) + 400); world.pointOfView(pov, ms); }
+
+        world.renderer().setPixelRatio(TARGET_PR);
+
+        // 交互活动 -> 唤醒渲染
+        const _ctrl = world.controls();
+        _ctrl.addEventListener('start', () => keepRendering(1500));
+        _ctrl.addEventListener('change', () => keepRendering(350));
+        _ctrl.addEventListener('end', () => keepRendering(900));
+        ['wheel', 'pointerdown', 'touchstart'].forEach(ev =>
+            window.addEventListener(ev, () => keepRendering(1500), { passive: true }));
 
         // 重新计算弧线样式（选中/取消/回放时调用，不触发几何过渡）
         function refreshArcStyle() {
@@ -373,6 +434,7 @@
             world.width(window.innerWidth);
             world.height(window.innerHeight);
             if (is2DMode) draw2DCanvas();
+            keepRendering(1500);
         });
 
         // ==========================================
@@ -438,6 +500,7 @@
             is2DMode = !is2DMode;
             const c = document.getElementById('canvas2d'), g = document.getElementById('globeViz'), btn = document.getElementById('btnProj');
             if (is2DMode) {
+                ensure2DImage(curTheme); // 首次进入 2D 才下载大图
                 draw2DCanvas();
                 c.style.opacity = 1; c.style.pointerEvents = 'auto';
                 g.style.opacity = 0; g.style.pointerEvents = 'none';
@@ -447,6 +510,7 @@
                 g.style.opacity = 1; g.style.pointerEvents = 'auto';
                 btn.innerText = i18n[lang].btnProj2d;
             }
+            keepRendering(1500);
         }
 
         // ==========================================
@@ -464,10 +528,12 @@
                 world.polygonLabel(world.polygonLabel());
                 upd();
             }
-            if (is2DMode) draw2DCanvas();
+            if (is2DMode) { ensure2DImage(curTheme); draw2DCanvas(); }
+            keepRendering(1500);
         }
 
         async function init() {
+            keepRendering(4000); // 启动期保持渲染：地球出现 + localStorage 恢复动画播完后再休眠
             Papa.parse("./optimized_airports.csv", {
                 download: true, header: true, skipEmptyLines: true, fastMode: true,
                 complete: r => {
@@ -478,8 +544,11 @@
                             if (item.isLarge) largeCities.push(item);
                         }
                     });
+                    // P3：启动不创建任何标签精灵；无数据时的封顶标签集（大步长抽样，保证地理分布）
+                    const stride = Math.max(1, Math.ceil(largeCities.length / MAX_IDLE_LABELS));
+                    idleCities = largeCities.filter((_, i) => i % stride === 0);
                     renderHubs = allCities;
-                    world.labelsData(renderHubs);
+                    world.labelsData([]);
                     isAirportsOK = true;
 
                     // 从 localStorage 恢复飞行记录
@@ -491,12 +560,18 @@
                     upd();
                 }
             });
+        }
 
+        // P4：省界懒加载——首次需要显示时才 fetch + 解析，之后全精度照常渲染
+        function loadProvinces() {
+            if (isProvsOK || provsLoading) return;
+            provsLoading = true;
             fetch("./provinces.json").then(res => res.json()).then(tj => {
                 provs = (tj.type === "Topology") ? topojson.feature(tj, tj.objects[Object.keys(tj.objects)[0]]).features : tj.features;
                 isProvsOK = true;
+                keepRendering(1500);
                 upd();
-            }).catch(() => console.log('No provinces.json'));
+            }).catch(() => { provsLoading = false; console.log('No provinces.json'); });
         }
 
         function upd() {
@@ -508,22 +583,28 @@
                         const v = document.getElementById('vMode').value;
                         world.labelsData(v === 'arc' ? [] : renderHubs);
                         world.labelSize(0.18);
+                        keepRendering(1200);
                     }
                 } else {
                     let tLabel = alt > 1.5 ? 0 : (alt > 0.6 ? 1 : 2);
                     if (tLabel !== cLabelState) {
                         cLabelState = tLabel;
-                        const displayData = tLabel === 0 ? [] : (tLabel === 1 ? largeCities : allCities);
+                        // P3：中景（最常用）只显示封顶后的主要枢纽 idleCities（≤200 个）；
+                        // 只有刻意放到最近时才显示全部大型机场，保证任意机型都流畅
+                        const displayData = tLabel === 0 ? [] : (tLabel === 1 ? idleCities : largeCities);
                         world.labelsData(displayData);
                         world.labelSize(tLabel === 1 ? 0.20 : 0.12);
+                        keepRendering(1200);
                     }
                 }
             }
-            if (isProvsOK && !is2DMode) {
+            if (!is2DMode) {
                 let tPoly = alt < 1.6 ? 1 : 0;
-                if (tPoly !== cPolyState) {
+                if (tPoly === 1 && !isProvsOK) loadProvinces(); // P4：首次需要时才加载省界
+                if (isProvsOK && tPoly !== cPolyState) {
                     cPolyState = tPoly;
                     world.polygonsData(tPoly === 1 ? provs : []);
+                    keepRendering(1200);
                 }
             }
         }
@@ -604,6 +685,7 @@
             applyDataMapping();
             updateStats();
             renderFlightList();
+            keepRendering(1500);
         }
 
         function applyDataMapping() {
@@ -637,6 +719,7 @@
                 world.labelDotRadius(world.labelDotRadius());
             }
             if (is2DMode) draw2DCanvas();
+            keepRendering(1500);
         }
 
         function clearAll() {
@@ -735,7 +818,7 @@
                 lng = (a + b) / 2; if (lng > 180) lng -= 360;
             } else { lng = (o.lg + d.lg) / 2; }
             const alt = Math.min(2.8, Math.max(1.05, f.dist / 2600 + 0.85));
-            world.pointOfView({ lat, lng, altitude: alt }, 900);
+            flyTo({ lat, lng, altitude: alt }, 900);
         }
 
         function clearFocus() {
@@ -749,7 +832,7 @@
 
         // 将全部航班纳入视野
         function overviewPOV() {
-            if (flights.length === 0) { world.pointOfView({ lat: 20, lng: 0, altitude: 2.5 }, 900); return; }
+            if (flights.length === 0) { flyTo({ lat: 20, lng: 0, altitude: 2.5 }, 900); return; }
             let slat = 0, slng = 0, n = 0, minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
             flights.forEach(f => {
                 const o = db[f.origin], d = db[f.dest]; if (!o || !d) return;
@@ -759,11 +842,11 @@
                     minLng = Math.min(minLng, p.lg); maxLng = Math.max(maxLng, p.lg);
                 });
             });
-            if (n === 0) { world.pointOfView({ lat: 20, lng: 0, altitude: 2.5 }, 900); return; }
+            if (n === 0) { flyTo({ lat: 20, lng: 0, altitude: 2.5 }, 900); return; }
             const lat = slat / n, lng = slng / n;
             const span = Math.max(maxLat - minLat, maxLng - minLng);
             const alt = Math.min(2.8, Math.max(1.4, span / 42 + 1.0));
-            world.pointOfView({ lat, lng, altitude: alt }, 900);
+            flyTo({ lat, lng, altitude: alt }, 900);
         }
 
         // ==========================================
@@ -864,7 +947,7 @@
             hideSuggestions(true);
             document.getElementById('src').value = '';
             const a = db[iata]; if (!a) return;
-            world.pointOfView({ lat: a.lt, lng: a.lg, altitude: 1.0 }, 900);
+            flyTo({ lat: a.lt, lng: a.lg, altitude: 1.0 }, 900);
             msg(`${i18n[lang].focused} ${a.iata} · ${a.n}`, '#00ff88');
         }
         function hideSuggestions(immediate) { const box = document.getElementById('sugg-box'); if (immediate) { box.style.display = 'none'; return; } setTimeout(() => { box.style.display = 'none'; }, 180); }
@@ -891,6 +974,7 @@
             const val = parseFloat(document.getElementById('rSpeed').value);
             world.controls().autoRotate = (val > 0);
             if (val > 0) world.controls().autoRotateSpeed = val;
+            keepRendering(1500);
         }
 
         function setSelOptions(selId, map) {
@@ -937,6 +1021,7 @@
             lang = l;
             ['zh', 'en'].forEach(k => document.getElementById(`b-${k}`).className = l === k ? 'active' : '');
             applyLang();
+            keepRendering(1500);
         }
 
         // ===== 启动 =====
