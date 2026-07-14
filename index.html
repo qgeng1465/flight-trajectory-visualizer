@@ -3,26 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <title>✈ 我的飞行足迹</title>
-    <!-- 优先加载本地内置库（离线可用），缺失时同步回退 CDN -->
-    <script src="libs/globe.gl.min.js"></script>
-    <script>window.Globe||document.write('<script src="https://unpkg.com/globe.gl@2.25.3/dist/globe.gl.min.js"><\/script>');</script>
-    <script src="libs/papaparse.min.js"></script>
-    <script>window.Papa||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"><\/script>');</script>
-    <script src="libs/topojson-client.min.js"></script>
-    <script>window.topojson||document.write('<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"><\/script>');</script>
-    <script src="libs/Stats.min.js"></script>
-    <script>window.Stats||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/16/Stats.min.js"><\/script>');</script>
+    <!-- 样式内联；库脚本放在 body 底部，让 UI 先渲染 -->
 
     <style>
         body { margin: 0; background: #000; color: #eee; font-family: system-ui; overflow: hidden; }
 
         /* ===== 右侧合并控制台 ===== */
-        #ui { position: absolute; top: 15px; right: 15px; z-index: 10; background: rgba(10,10,10,0.85); padding: 18px; border-radius: 8px; width: 340px; border: 1px solid #333; backdrop-filter: blur(4px); max-height: 90vh; overflow-y: auto; box-shadow: -4px 4px 15px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s; transform: translateX(0); }
+        #ui { position: absolute; top: 15px; right: 15px; z-index: 1000; pointer-events: auto; background: rgba(10,10,10,0.9); padding: 18px; border-radius: 8px; width: 340px; border: 1px solid #333; backdrop-filter: blur(6px); max-height: 90vh; overflow-y: auto; box-shadow: -4px 4px 20px rgba(0,0,0,0.9); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s; transform: translateX(0); }
         #ui.collapsed { transform: translateX(calc(100% + 30px)); opacity: 0; pointer-events: none; }
+        #ui * { pointer-events: auto; }
 
         /* 呼出按钮：始终位于面板右上角之上，同一按钮负责展开/收起 */
-        #btn-show-ui { position: absolute; top: 15px; right: 15px; z-index: 20; background: rgba(10,10,10,0.85); border: 1px solid #333; color: #aaa; width: 32px; height: 32px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); font-size: 16px; transition: 0.2s; padding: 0; }
-        #btn-show-ui:hover { color: #00ff88; border-color: #00ff88; transform: scale(1.05); }
+        #btn-show-ui { position: absolute; top: 15px; right: 15px; z-index: 1001; pointer-events: auto; background: rgba(10,10,10,0.9); border: 1px solid #444; color: #aaa; width: 36px; height: 36px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); font-size: 18px; transition: 0.2s; padding: 0; user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+        #btn-show-ui:hover { color: #00ff88; border-color: #00ff88; transform: scale(1.08); background: rgba(10,10,10,1); }
         #btn-show-ui:active { transform: scale(0.95); }
 
         h3 { margin: 0 0 12px; color: #00ff88; font-size: 16px; border-bottom: 1px solid #222; padding-bottom: 8px; width: 85%; }
@@ -80,7 +73,7 @@
         #privacy-note { font-size: 10px; color: #777; margin-top: 12px; line-height: 1.6; border-top: 1px solid #222; padding-top: 8px; }
 
         /* ===== 航班详情卡 ===== */
-        #detail-card { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 20; width: 290px; background: rgba(10,10,10,0.92); border: 1px solid #ffcc00; border-radius: 10px; padding: 16px 16px 14px; box-shadow: 0 8px 28px rgba(0,0,0,0.85); backdrop-filter: blur(6px); animation: dcIn 0.3s ease; }
+        #detail-card { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 1010; width: 290px; background: rgba(10,10,10,0.92); border: 1px solid #ffcc00; border-radius: 10px; padding: 16px 16px 14px; box-shadow: 0 8px 28px rgba(0,0,0,0.85); backdrop-filter: blur(6px); animation: dcIn 0.3s ease; }
         #detail-card.hidden { display: none; }
         @keyframes dcIn { from { opacity: 0; transform: translate(-50%, 14px); } to { opacity: 1; transform: translate(-50%, 0); } }
         .dc-id { font-family: monospace; font-size: 15px; color: #ffcc00; margin-bottom: 8px; padding-right: 26px; }
@@ -188,6 +181,27 @@
 
     <canvas id="canvas2d"></canvas>
     <div id="globeViz"></div>
+
+    <!-- 先加载本地内置库；若本地缺失则静默回退 CDN（异步），主脚本会做可用性检查 -->
+    <script src="libs/globe.gl.min.js"></script>
+    <script src="libs/papaparse.min.js"></script>
+    <script src="libs/topojson-client.min.js"></script>
+    <script src="libs/Stats.min.js"></script>
+    <script>
+    (function(){
+        const libs = [
+            {name:'Globe', cdn:'https://unpkg.com/globe.gl@2.25.3/dist/globe.gl.min.js'},
+            {name:'Papa', cdn:'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js'},
+            {name:'topojson', cdn:'https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js'},
+            {name:'Stats', cdn:'https://cdnjs.cloudflare.com/ajax/libs/stats.js/16/Stats.min.js'}
+        ];
+        libs.forEach(l => {
+            if (window[l.name]) return;
+            const s = document.createElement('script'); s.src = l.cdn; s.async = false;
+            document.head.appendChild(s);
+        });
+    })();
+    </script>
 
     <script>
         const statsObj = new Stats();
