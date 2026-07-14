@@ -155,8 +155,6 @@
             <div id="sugg-box"></div>
         </div>
 
-        <div class="group"><label id="l-file">导入航线数据 (.csv)</label><input type="file" id="fIn" accept=".csv"></div>
-
         <div class="group">
             <label id="l-theme">地图主题</label>
             <select id="gTheme" onchange="changeTheme()">
@@ -213,24 +211,26 @@
         document.body.appendChild(statsObj.dom);
         // 轻量 rAF 循环：只跑 stats 与看门狗；真正昂贵的 globe.gl 内部渲染由 pauseAnimation 休眠
         function animate() {
-            statsObj.update();
-            const now = performance.now();
-            // P1 看门狗：有活动才渲染，静止时暂停 globe.gl 内部渲染循环
-            const active = world.controls().autoRotate || replaying || selectedId !== null || now < renderUntil;
-            if (!active && !paused) { world.pauseAnimation(); paused = true; }
-            else if (active && paused) { world.resumeAnimation(); paused = false; }
-            // P2 自适应渲染像素比：仅在地球实际渲染时采样 FPS（贴图永远满分辨率）
-            if (!paused) {
-                _fpsFrames++;
-                if (now - _fpsLast >= 500) {
-                    const fps = _fpsFrames * 1000 / (now - _fpsLast);
-                    _fpsFrames = 0; _fpsLast = now;
-                    if (fps < 40) { _prLo++; _prHi = 0; if (_prLo >= 2 && currentPR > 0.75) { currentPR = Math.max(0.75, +(currentPR - 0.25).toFixed(2)); applyPR(); _prLo = 0; } }
-                    else if (fps > 57) { _prHi++; _prLo = 0; if (_prHi >= 2 && currentPR < TARGET_PR) { currentPR = Math.min(TARGET_PR, +(currentPR + 0.25).toFixed(2)); applyPR(); _prHi = 0; } }
-                    else { _prLo = 0; _prHi = 0; }
-                }
-            } else { _fpsFrames = 0; _fpsLast = now; }
-            requestAnimationFrame(animate);
+            requestAnimationFrame(animate); // 先排下一帧：即使本帧抛错，看门狗循环也永不中断
+            try {
+                statsObj.update();
+                const now = performance.now();
+                // P1 看门狗：有活动才渲染，静止时暂停 globe.gl 内部渲染循环
+                const active = world.controls().autoRotate || replaying || selectedId !== null || now < renderUntil;
+                if (!active && !paused) { world.pauseAnimation(); paused = true; }
+                else if (active && paused) { world.resumeAnimation(); paused = false; }
+                // P2 自适应渲染像素比：仅在地球实际渲染时采样 FPS（贴图永远满分辨率）
+                if (!paused) {
+                    _fpsFrames++;
+                    if (now - _fpsLast >= 500) {
+                        const fps = _fpsFrames * 1000 / (now - _fpsLast);
+                        _fpsFrames = 0; _fpsLast = now;
+                        if (fps < 40) { _prLo++; _prHi = 0; if (_prLo >= 2 && currentPR > 0.75) { currentPR = Math.max(0.75, +(currentPR - 0.25).toFixed(2)); applyPR(); _prLo = 0; } }
+                        else if (fps > 57) { _prHi++; _prLo = 0; if (_prHi >= 2 && currentPR < TARGET_PR) { currentPR = Math.min(TARGET_PR, +(currentPR + 0.25).toFixed(2)); applyPR(); _prHi = 0; } }
+                        else { _prLo = 0; _prHi = 0; }
+                    }
+                } else { _fpsFrames = 0; _fpsLast = now; }
+            } catch (e) { /* 吞掉异常，保证渲染看门狗永不中断 */ }
         }
         requestAnimationFrame(animate);
 
@@ -344,7 +344,9 @@
         // ==========================================
         // 3D WebGL 引擎配置
         // ==========================================
-        const world = Globe({ rendererConfig: { antialias: true, alpha: true, preserveDrawingBuffer: true } })(document.getElementById('globeViz'));
+        // preserveDrawingBuffer:false —— 避免每帧整帧缓冲拷贝（与 MSAA 叠加是卡顿主因），画质无损；
+        // 截图由 exportSnapshot 同步 render→toDataURL 完成，无需保留缓冲。
+        const world = Globe({ rendererConfig: { antialias: true, alpha: true, preserveDrawingBuffer: false } })(document.getElementById('globeViz'));
 
         world.globeImageUrl(T[curTheme].img);
         world.bumpImageUrl('./earth-topology.png');
@@ -534,31 +536,43 @@
 
         async function init() {
             keepRendering(4000); // 启动期保持渲染：地球出现 + localStorage 恢复动画播完后再休眠
+            if (typeof Papa === 'undefined') { msg('❌ CSV 解析库未能加载，请检查网络后刷新页面', 'red'); return; }
             Papa.parse("./optimized_airports.csv", {
                 download: true, header: true, skipEmptyLines: true, fastMode: true,
                 complete: r => {
-                    r.data.forEach(x => {
-                        if (x.iata_code && (x.type === 'large_airport' || x.type === 'medium_airport')) {
-                            const item = { iata: x.iata_code.toUpperCase(), n: x.name, lt: +x.latitude_deg, lg: +x.longitude_deg, isLarge: x.type === 'large_airport', v: 0 };
-                            db[item.iata] = item; allCities.push(item);
-                            if (item.isLarge) largeCities.push(item);
+                    try {
+                        r.data.forEach(x => {
+                            if (x.iata_code && (x.type === 'large_airport' || x.type === 'medium_airport')) {
+                                const item = { iata: x.iata_code.toUpperCase(), n: x.name, lt: +x.latitude_deg, lg: +x.longitude_deg, isLarge: x.type === 'large_airport', v: 0 };
+                                db[item.iata] = item; allCities.push(item);
+                                if (item.isLarge) largeCities.push(item);
+                            }
+                        });
+                        // P3：启动不创建任何标签精灵；无数据时的封顶标签集（大步长抽样，保证地理分布）
+                        const stride = Math.max(1, Math.ceil(largeCities.length / MAX_IDLE_LABELS));
+                        idleCities = largeCities.filter((_, i) => i % stride === 0);
+                        renderHubs = allCities;
+                        world.labelsData([]);
+                        isAirportsOK = true;
+
+                        // 从 localStorage 恢复飞行记录
+                        flights = loadFlightsFromStorage();
+                        sortFlightsAsc();
+                        if (flights.length) {
+                            rebuildFromFlights(); overviewPOV();
+                            msg(i18n[lang].restored.replace('{n}', flights.length), '#00ff88');
+                        } else {
+                            updateStats(); renderFlightList();
+                            // 关键修复：无数据时也必须更新状态，否则会一直卡在「内核启动中」
+                            msg(lang === 'zh' ? '✅ 就绪 · 导入飞行 CSV 开始记录足迹' : '✅ Ready · import a flight CSV to begin', '#00ff88');
                         }
-                    });
-                    // P3：启动不创建任何标签精灵；无数据时的封顶标签集（大步长抽样，保证地理分布）
-                    const stride = Math.max(1, Math.ceil(largeCities.length / MAX_IDLE_LABELS));
-                    idleCities = largeCities.filter((_, i) => i % stride === 0);
-                    renderHubs = allCities;
-                    world.labelsData([]);
-                    isAirportsOK = true;
-
-                    // 从 localStorage 恢复飞行记录
-                    flights = loadFlightsFromStorage();
-                    sortFlightsAsc();
-                    if (flights.length) { rebuildFromFlights(); overviewPOV(); msg(i18n[lang].restored.replace('{n}', flights.length), '#00ff88'); }
-                    else { updateStats(); renderFlightList(); }
-
-                    upd();
-                }
+                        upd();
+                    } catch (e) {
+                        console.error('init error', e);
+                        msg('⚠ 初始化出错：' + (e && e.message ? e.message : e), 'red');
+                    }
+                },
+                error: err => { msg('❌ 机场数据加载失败，请确认 optimized_airports.csv 存在：' + (err && err.message ? err.message : err), 'red'); }
             });
         }
 
@@ -731,7 +745,6 @@
             renderHubs = allCities;
             hasData = false;
             try { localStorage.removeItem(LS_KEY); } catch (e) { /* ignore */ }
-            document.getElementById('fIn').value = '';
             document.getElementById('fIn2').value = '';
             cLabelState = -1;
             hideDetail();
@@ -988,7 +1001,6 @@
             document.getElementById('ui-title').innerText = t.uiTitle;
             document.getElementById('l-search').innerText = t.lSearch;
             document.getElementById('src').placeholder = t.searchPh;
-            document.getElementById('l-file').innerText = t.lFile;
             document.getElementById('l-theme').innerText = t.lTheme;
             document.getElementById('l-view').innerText = t.lView;
             document.getElementById('l-rotate').innerText = t.lRotate;
@@ -1025,7 +1037,6 @@
         }
 
         // ===== 启动 =====
-        document.getElementById('fIn').onchange = onFileChosen;
         document.getElementById('fIn2').onchange = onFileChosen;
         world.onZoom(upd);
         init();
