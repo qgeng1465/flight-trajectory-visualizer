@@ -16,28 +16,22 @@
     <style>
         body { margin: 0; background: #000; color: #eee; font-family: system-ui; overflow: hidden; }
 
-        /* ===== 右侧控制台 ===== */
-        #ui { position: absolute; top: 15px; right: 15px; z-index: 10; background: rgba(10,10,10,0.85); padding: 18px; border-radius: 8px; width: 300px; border: 1px solid #333; backdrop-filter: blur(4px); max-height: 90vh; overflow-y: auto; box-shadow: -4px 4px 15px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s; transform: translateX(0); }
-        #ui.collapsed { transform: translateX(350px); opacity: 0; pointer-events: none; }
+        /* ===== 右侧合并控制台 ===== */
+        #ui { position: absolute; top: 15px; right: 15px; z-index: 10; background: rgba(10,10,10,0.85); padding: 18px; border-radius: 8px; width: 340px; border: 1px solid #333; backdrop-filter: blur(4px); max-height: 90vh; overflow-y: auto; box-shadow: -4px 4px 15px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s; transform: translateX(0); }
+        #ui.collapsed { transform: translateX(calc(100% + 30px)); opacity: 0; pointer-events: none; }
 
-        /* ===== 左侧「我的飞行」面板 ===== */
-        #panel-flights { position: absolute; top: 15px; left: 15px; z-index: 10; background: rgba(10,10,10,0.85); padding: 18px; border-radius: 8px; width: 330px; border: 1px solid #333; backdrop-filter: blur(4px); max-height: 80vh; overflow-y: auto; box-shadow: 4px 4px 15px rgba(0,0,0,0.8); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s; transform: translateX(0); }
-        #panel-flights.collapsed { transform: translateX(-380px); opacity: 0; pointer-events: none; }
-
-        /* 极简呼出按钮 */
-        #btn-show-ui { position: absolute; top: 15px; right: 15px; z-index: 5; background: rgba(10,10,10,0.6); border: 1px solid #333; color: #aaa; width: 32px; height: 32px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); font-size: 16px; transition: 0.2s; padding: 0; }
-        #btn-show-ui:hover { color: #00ff88; border-color: #00ff88; }
-        #btn-show-flights { position: absolute; top: 15px; left: 15px; z-index: 5; background: rgba(10,10,10,0.6); border: 1px solid #333; color: #aaa; width: 32px; height: 32px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); font-size: 16px; transition: 0.2s; padding: 0; }
-        #btn-show-flights:hover { color: #ffcc00; border-color: #ffcc00; }
-
-        .min-btn { position: absolute; top: 15px; right: 15px; width: 30px !important; height: 30px; padding: 0 !important; background: transparent !important; border: 1px solid #333 !important; color: #aaa !important; font-size: 14px !important; line-height: 1; text-align: center; border-radius: 4px; margin-top: 0 !important; transition: 0.2s; }
-        .min-btn:hover { border-color: #ff5555 !important; color: #ff5555 !important; }
+        /* 呼出按钮：始终位于面板右上角之上，同一按钮负责展开/收起 */
+        #btn-show-ui { position: absolute; top: 15px; right: 15px; z-index: 20; background: rgba(10,10,10,0.85); border: 1px solid #333; color: #aaa; width: 32px; height: 32px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); font-size: 16px; transition: 0.2s; padding: 0; }
+        #btn-show-ui:hover { color: #00ff88; border-color: #00ff88; transform: scale(1.05); }
+        #btn-show-ui:active { transform: scale(0.95); }
 
         h3 { margin: 0 0 12px; color: #00ff88; font-size: 16px; border-bottom: 1px solid #222; padding-bottom: 8px; width: 85%; }
-        #flights-title { color: #ffcc00; }
         .group { margin-bottom: 10px; position: relative; }
         label { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-bottom: 4px; font-weight: bold; }
         input[type="text"], input[type="file"], select, button { width: 100%; background: #1a1a1a; color: #fff; border: 1px solid #333; padding: 8px; border-radius: 4px; font-size: 13px; box-sizing: border-box; }
+        input[type="file"], select, button { cursor: pointer; }
+        input[type="text"] { cursor: text; }
+        input[type="file"]::-webkit-file-upload-button { cursor: pointer; }
         button { cursor: pointer; transition: 0.2s; margin-top: 5px; }
         button:hover { border-color: #00ff88; }
         #sys-msg { font-size: 11px; color: #ffb86c; margin-top: 10px; font-family: monospace; line-height: 1.5; background: #111; padding: 8px; border-radius: 4px; border: 1px solid #333; }
@@ -106,11 +100,14 @@
     </style>
 </head>
 <body>
-    <!-- 左侧呼出按钮 + 我的飞行面板 -->
-    <button id="btn-show-flights" onclick="toggleFlights()" title="展开飞行面板">✈️</button>
-    <div id="panel-flights">
-        <button class="min-btn" onclick="toggleFlights()" title="收起面板">✕</button>
-        <h3 id="flights-title">✈ 我的飞行足迹</h3>
+    <!-- 右侧呼出按钮 + 合并控制台 -->
+    <button id="btn-show-ui" onclick="toggleUI()" title="展开/收起面板">✈️</button>
+    <div id="ui">
+        <h3 id="ui-title">✈ 我的飞行足迹</h3>
+        <div class="flex">
+            <button id="b-zh" class="active" onclick="switchLang('zh')">中文</button>
+            <button id="b-en" onclick="switchLang('en')">EN</button>
+        </div>
 
         <div class="stats-grid">
             <div class="stat-card"><div class="stat-num" id="st-count">0</div><div class="stat-label" id="lbl-count">飞行次数</div></div>
@@ -135,19 +132,6 @@
         </div>
 
         <div id="flight-list"></div>
-
-        <div id="privacy-note">🔒 所有飞行数据仅保存在本浏览器本地（localStorage），绝不上传到任何服务器。</div>
-    </div>
-
-    <!-- 右侧呼出按钮 + 控制台 -->
-    <button id="btn-show-ui" onclick="toggleUI()" title="展开面板">⚙️</button>
-    <div id="ui">
-        <button class="min-btn" onclick="toggleUI()" title="收起控制面板">✕</button>
-        <h3 id="ui-title">控制台</h3>
-        <div class="flex">
-            <button id="b-zh" class="active" onclick="switchLang('zh')">中文</button>
-            <button id="b-en" onclick="switchLang('en')">EN</button>
-        </div>
 
         <div class="group">
             <label id="l-search">机场搜索</label>
@@ -189,6 +173,8 @@
         <div class="flex">
             <button id="btn-clear" onclick="clearAll()" style="color:#ff5555; border-color:#422;">清除数据</button>
         </div>
+
+        <div id="privacy-note">🔒 所有飞行数据仅保存在本浏览器本地（localStorage），绝不上传到任何服务器。</div>
         <div id="sys-msg">内核启动中...</div>
     </div>
 
@@ -339,7 +325,6 @@
         function pick(obj, keys) { for (const k of keys) { const v = obj[k]; if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim(); } return ''; }
 
         function toggleUI() { document.getElementById('ui').classList.toggle('collapsed'); }
-        function toggleFlights() { document.getElementById('panel-flights').classList.toggle('collapsed'); }
 
         // ==========================================
         // 3D WebGL 引擎配置
@@ -998,7 +983,7 @@
         function applyLang() {
             const t = i18n[lang];
             document.title = t.pageTitle;
-            document.getElementById('ui-title').innerText = t.uiTitle;
+            document.getElementById('ui-title').innerText = t.panelTitle;
             document.getElementById('l-search').innerText = t.lSearch;
             document.getElementById('src').placeholder = t.searchPh;
             document.getElementById('l-theme').innerText = t.lTheme;
@@ -1008,7 +993,6 @@
             document.getElementById('btn-snap3d').innerText = t.snap3d;
             document.getElementById('btn-snap2d').innerText = t.snap2d;
             document.getElementById('btn-clear').innerText = t.clear;
-            document.getElementById('flights-title').innerText = t.panelTitle;
             document.getElementById('lbl-count').innerText = t.stCount;
             document.getElementById('lbl-dist').innerText = t.stDist;
             document.getElementById('lbl-dur').innerText = t.stDur;
