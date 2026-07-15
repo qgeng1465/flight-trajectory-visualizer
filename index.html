@@ -465,7 +465,7 @@
         world.labelText(d => d._labelText || d.iata);
         world.labelDotRadius(d => d._dotR);
         world.labelColor(d => d._labelColor);
-        world.labelResolution(3);
+        world.labelResolution(2);
 
         // 点击机场标签可进入该机场的航线筛选
         world.onLabelClick((d, ev, coords) => { if (d && d.iata && d.v > 0) selectAirport(d.iata); });
@@ -779,7 +779,7 @@
             if (isAirportsOK && !is2DMode) {
                 if (hasData) {
                     // 0=不显示 1=只显示 IATA 2=显示 IATA + 名称
-                    let tLabel = alt > 1.6 ? 0 : (alt > 0.7 ? 1 : 2);
+                    let tLabel = alt > 1.5 ? 0 : (alt > 0.5 ? 1 : 2);
                     if (cLabelState !== tLabel) {
                         cLabelState = tLabel;
                         const v = document.getElementById('vMode').value;
@@ -1351,6 +1351,7 @@
         }
 
         // ===== 启动 =====
+        world.resumeAnimation(); // 确保内部渲染循环持续运行，不暂停
         document.getElementById('fIn2').onchange = onFileChosen;
         let _updPending = false;
         function updThrottled() {
