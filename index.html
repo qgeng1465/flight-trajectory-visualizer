@@ -245,7 +245,7 @@
         let flights = [];          // 主数据（已 enrich），canonical 按时间升序
         let selectedId = null;     // 当前选中航班 key
         let sortMode = 'time';     // 'time' | 'distance'
-        let replayTimer = null, replaying = false;
+        let replaying = false;
         const LS_KEY = 'flightTracker.flights';
         const HL_COLOR = '#ffcc00';
         const DIM_COLOR = 'rgba(140,140,140,0.16)';
@@ -345,7 +345,7 @@
         // ==========================================
         // preserveDrawingBuffer:false —— 避免每帧整帧缓冲拷贝（与 MSAA 叠加是卡顿主因），画质无损；
         // 截图由 exportSnapshot 同步 render→toDataURL 完成，无需保留缓冲。
-        const world = Globe({ rendererConfig: { antialias: true, alpha: true, preserveDrawingBuffer: false } })(document.getElementById('globeViz'));
+        const world = Globe({ rendererConfig: { antialias: true, alpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' } })(document.getElementById('globeViz'));
 
         world.globeImageUrl(T[curTheme].img);
         world.bumpImageUrl('./earth-topology.png');
@@ -357,36 +357,52 @@
         world.labelLat(d => d.lt);
         world.labelLng(d => d.lg);
         world.labelText(d => d.iata);
-        world.labelDotRadius(d => {
-            const base = d.isLarge ? 0.20 : 0.12;
-            return base + Math.min(d.v * 0.05, 0.6);
-        });
-        world.labelColor(d => {
-            const alpha = Math.min(0.4 + (d.v * 0.15), 1.0);
-            return `rgba(255, 255, 255, ${alpha})`;
-        });
-        world.labelResolution(4);
+        world.labelDotRadius(d => d._dotR);
+        world.labelColor(d => d._labelColor);
+        world.labelResolution(3);
 
-        // ===== 弧线样式访问器（读取 selectedId，实现高亮 + 虚线流动动画）=====
-        function arcColorFn(d) {
-            if (selectedId) return d._fid === selectedId ? HL_COLOR : DIM_COLOR;
-            return d.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN;
+        function enrichHubs(hubs) {
+            hubs.forEach(d => {
+                const base = d.isLarge ? 0.20 : 0.12;
+                d._dotR = base + Math.min(d.v * 0.05, 0.6);
+                const alpha = Math.min(0.4 + (d.v * 0.15), 1.0);
+                d._labelColor = `rgba(255, 255, 255, ${alpha})`;
+            });
         }
-        function arcStrokeFn(d) {
-            if (selectedId) return d._fid === selectedId ? 0.9 : 0.18;
-            return 0.35;
-        }
-        function arcDashLengthFn(d) { return (selectedId && d._fid === selectedId) ? 0.32 : 1; }
-        function arcDashGapFn(d) { return (selectedId && d._fid === selectedId) ? 0.85 : 0; }
-        function arcDashInitialGapFn(d) { return 0; }
-        function arcDashAnimateTimeFn(d) { return (selectedId && d._fid === selectedId) ? 1700 : 0; }
 
-        world.arcStroke(arcStrokeFn);
-        world.arcColor(arcColorFn);
-        world.arcDashLength(arcDashLengthFn);
-        world.arcDashGap(arcDashGapFn);
-        world.arcDashInitialGap(arcDashInitialGapFn);
-        world.arcDashAnimateTime(arcDashAnimateTimeFn);
+        // ===== 弧线样式访问器（使用数据属性，避免每帧函数调用 + 选中时全量重建）=====
+        function enrichArcs() {
+            const sel = selectedId;
+            rawArcs.forEach(d => {
+                const isSel = sel && d._fid === sel;
+                if (isSel) {
+                    d._color = HL_COLOR;
+                    d._stroke = 0.9;
+                    d._dashLen = 0.32;
+                    d._dashGap = 0.85;
+                    d._dashTime = 1700;
+                } else if (sel) {
+                    d._color = DIM_COLOR;
+                    d._stroke = 0.18;
+                    d._dashLen = 1;
+                    d._dashGap = 0;
+                    d._dashTime = 0;
+                } else {
+                    d._color = d.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN;
+                    d._stroke = 0.35;
+                    d._dashLen = 1;
+                    d._dashGap = 0;
+                    d._dashTime = 0;
+                }
+            });
+        }
+
+        world.arcStroke('_stroke');
+        world.arcColor('_color');
+        world.arcDashLength('_dashLen');
+        world.arcDashGap('_dashGap');
+        world.arcDashInitialGap(0);
+        world.arcDashAnimateTime('_dashTime');
 
         world.polygonCapColor(() => T[curTheme].pFill);
         world.polygonStrokeColor(() => T[curTheme].pStrk);
@@ -420,22 +436,21 @@
         ['wheel', 'pointerdown', 'touchstart'].forEach(ev =>
             window.addEventListener(ev, () => keepRendering(1500), { passive: true }));
 
-        // 重新计算弧线样式（选中/取消/回放时调用，不触发几何过渡）
+        // 重新计算弧线样式（仅刷新数据属性；3D 下一帧自动生效，2D 需要重绘）
         function refreshArcStyle() {
-            world.arcColor(arcColorFn);
-            world.arcStroke(arcStrokeFn);
-            world.arcDashLength(arcDashLengthFn);
-            world.arcDashGap(arcDashGapFn);
-            world.arcDashInitialGap(arcDashInitialGapFn);
-            world.arcDashAnimateTime(arcDashAnimateTimeFn);
+            enrichArcs();
             if (is2DMode) draw2DCanvas();
         }
 
+        let _rszTimer = null;
         window.addEventListener('resize', () => {
             world.width(window.innerWidth);
             world.height(window.innerHeight);
-            if (is2DMode) draw2DCanvas();
-            keepRendering(1500);
+            clearTimeout(_rszTimer);
+            _rszTimer = setTimeout(() => {
+                if (is2DMode) draw2DCanvas();
+                keepRendering(1500);
+            }, 120);
         });
 
         // ==========================================
@@ -443,14 +458,18 @@
         // ==========================================
         function draw2DCanvas() {
             const canvas = document.getElementById('canvas2d');
-            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            const W = window.innerWidth, H = window.innerHeight;
+            const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+            canvas.width = Math.floor(W * dpr);
+            canvas.height = Math.floor(H * dpr);
             const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             ctx.fillStyle = T[curTheme].mapBg;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, W, H);
 
-            const mapW = canvas.width; const mapH = mapW / 2;
-            const offsetX = 0; const offsetY = (canvas.height - mapH) / 2;
+            const mapW = W; const mapH = mapW / 2;
+            const offsetX = 0; const offsetY = (H - mapH) / 2;
 
             const bgImg = curTheme === 'color' ? img2DColor : img2DDark;
             if (bgImg.complete && bgImg.naturalWidth !== 0) {
@@ -465,30 +484,23 @@
 
             const v = document.getElementById('vMode').value;
             if (v !== 'hub') {
-                const drawArc = (arc, sel) => {
+                const drawArc = (arc) => {
                     ctx.beginPath();
-                    if (selectedId) {
-                        ctx.strokeStyle = sel ? HL_COLOR : 'rgba(120,120,120,0.28)';
-                        ctx.lineWidth = sel ? 2.6 : 0.8;
-                        ctx.globalAlpha = sel ? 1.0 : 0.55;
-                    } else {
-                        ctx.strokeStyle = arc.weight > 100 ? T[curTheme].arcH : T[curTheme].arcN;
-                        ctx.lineWidth = 1.2;
-                        ctx.globalAlpha = 0.85;
-                    }
+                    const isSel = selectedId && arc._fid === selectedId;
+                    ctx.strokeStyle = isSel ? HL_COLOR : (selectedId ? 'rgba(120,120,120,0.28)' : arc._color);
+                    ctx.lineWidth = isSel ? 2.6 : (selectedId ? 0.8 : 1.2);
+                    ctx.globalAlpha = isSel ? 1.0 : (selectedId ? 0.55 : 0.85);
                     ctx.moveTo(getX(arc.startLng), getY(arc.startLat));
                     ctx.lineTo(getX(arc.endLng), getY(arc.endLat));
                     ctx.stroke();
                 };
-                renderArcs.forEach(arc => { if (!(selectedId && arc._fid === selectedId)) drawArc(arc, false); });
-                if (selectedId) { const s = renderArcs.find(a => a._fid === selectedId); if (s) drawArc(s, true); }
+                renderArcs.forEach(drawArc);
             }
 
             if (v !== 'arc') {
                 renderHubs.forEach(hub => {
                     ctx.beginPath();
-                    const alpha = Math.min(0.4 + (hub.v * 0.15), 1.0);
-                    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                    ctx.fillStyle = hub._labelColor;
                     const radius = Math.max(2.5, 2.5 + Math.min(hub.v * 1.5, 6));
                     ctx.arc(getX(hub.lg), getY(hub.lt), radius, 0, 2 * Math.PI);
                     ctx.fill();
@@ -521,7 +533,8 @@
             curTheme = document.getElementById('gTheme').value;
             world.globeImageUrl(T[curTheme].img);
             world.atmosphereColor(T[curTheme].atmos);
-            world.arcColor(arcColorFn);
+            enrichArcs();
+            enrichHubs(renderHubs);
             world.polygonCapColor(() => T[curTheme].pFill);
             world.polygonStrokeColor(() => T[curTheme].pStrk);
             if (isProvsOK) {
@@ -550,6 +563,7 @@
                         // P3：启动不创建任何标签精灵；无数据时的封顶标签集（大步长抽样，保证地理分布）
                         const stride = Math.max(1, Math.ceil(largeCities.length / MAX_IDLE_LABELS));
                         idleCities = largeCities.filter((_, i) => i % stride === 0);
+                        enrichHubs(allCities);
                         renderHubs = allCities;
                         world.labelsData([]);
                         isAirportsOK = true;
@@ -695,6 +709,7 @@
             rawArcs = arcs;
             rawHubs = Array.from(hubs.values());
             hasData = flights.length > 0;
+            enrichArcs();
             applyDataMapping();
             updateStats();
             renderFlightList();
@@ -711,6 +726,7 @@
                     activeNodes.push(db[h.iata]);
                 }
             });
+            enrichHubs(activeNodes);
             renderHubs = activeNodes;
             cLabelState = -1;
             renderLayers();
@@ -726,11 +742,6 @@
                 cLabelState = -1;
                 upd();
             }
-
-            if (v !== 'arc') {
-                world.labelColor(world.labelColor());
-                world.labelDotRadius(world.labelDotRadius());
-            }
             if (is2DMode) draw2DCanvas();
             keepRendering(1500);
         }
@@ -741,6 +752,7 @@
             selectedId = null;
             flights = []; rawArcs = []; rawHubs = []; renderArcs = [];
             allCities.forEach(c => c.v = 0);
+            enrichHubs(allCities);
             renderHubs = allCities;
             hasData = false;
             try { localStorage.removeItem(LS_KEY); } catch (e) { /* ignore */ }
@@ -809,19 +821,22 @@
         // ==========================================
         // 选中航班 -> 高亮 + 聚焦 + 详情
         // ==========================================
-        function selectFlight(fid) {
+        function selectFlight(fid, opts = {}) {
             selectedId = fid;
             markSelectedCard();
             refreshArcStyle();
             const f = flights.find(x => x.key === fid);
-            if (f) { focusArc(f); showDetail(f); }
+            if (f) {
+                focusArc(f, opts.flyMs);
+                if (!opts.noDetail) showDetail(f);
+            }
             const el = document.querySelector(`.flight-card[data-fid="${cssEscape(fid)}"]`);
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
         function cssEscape(s) { return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/["\\\]]/g, '\\$&'); }
 
-        function focusArc(f) {
+        function focusArc(f, ms = 900) {
             const o = db[f.origin], d = db[f.dest]; if (!o || !d) return;
             const lat = (o.lt + d.lt) / 2;
             let lng;
@@ -830,7 +845,7 @@
                 lng = (a + b) / 2; if (lng > 180) lng -= 360;
             } else { lng = (o.lg + d.lg) / 2; }
             const alt = Math.min(2.8, Math.max(1.05, f.dist / 2600 + 0.85));
-            flyTo({ lat, lng, altitude: alt }, 900);
+            flyTo({ lat, lng, altitude: alt }, ms);
         }
 
         function clearFocus() {
@@ -870,25 +885,35 @@
             document.getElementById('btn-stop').style.display = on ? 'block' : 'none';
         }
 
+        const REPLAY_MS_PER_FLIGHT = 2600;
+        const REPLAY_FLY_MS = 500;
+        let replayRaf = null, replaySeq = [], replayIdx = -1, replayT0 = 0;
+
         function startReplay() {
             if (flights.length === 0) { msg(i18n[lang].noReplay); return; }
             stopReplay();
             selectedId = null; markSelectedCard(); refreshArcStyle(); hideDetail();
-            const seq = flights.slice().sort((a, b) => (a.ts - b.ts) || a.key.localeCompare(b.key));
-            let i = 0;
+            replaySeq = flights.slice().sort((a, b) => (a.ts - b.ts) || a.key.localeCompare(b.key));
+            replayIdx = -1;
+            replayT0 = performance.now();
             setReplaying(true);
-            const step = () => {
-                if (!replaying) return;
-                if (i >= seq.length) { stopReplay(); clearFocus(); return; }
-                selectFlight(seq[i].key);
-                i++;
-                replayTimer = setTimeout(step, 1900);
-            };
-            step();
+            replayRaf = requestAnimationFrame(replayLoop);
+        }
+
+        function replayLoop(now) {
+            if (!replaying) return;
+            if (replayIdx >= replaySeq.length - 1) { stopReplay(); clearFocus(); return; }
+            const dt = now - replayT0;
+            const idx = Math.min(Math.floor(dt / REPLAY_MS_PER_FLIGHT), replaySeq.length - 1);
+            if (idx !== replayIdx) {
+                replayIdx = idx;
+                selectFlight(replaySeq[replayIdx].key, { flyMs: REPLAY_FLY_MS });
+            }
+            replayRaf = requestAnimationFrame(replayLoop);
         }
 
         function stopReplay() {
-            if (replayTimer) { clearTimeout(replayTimer); replayTimer = null; }
+            if (replayRaf) { cancelAnimationFrame(replayRaf); replayRaf = null; }
             if (replaying) setReplaying(false);
         }
 
@@ -1036,7 +1061,13 @@
 
         // ===== 启动 =====
         document.getElementById('fIn2').onchange = onFileChosen;
-        world.onZoom(upd);
+        let _updPending = false;
+        function updThrottled() {
+            if (_updPending) return;
+            _updPending = true;
+            requestAnimationFrame(() => { _updPending = false; upd(); });
+        }
+        world.onZoom(updThrottled);
         init();
         setRotation();
         applyLang();
