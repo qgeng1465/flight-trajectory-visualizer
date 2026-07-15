@@ -7,16 +7,17 @@
 ## 📖 Overview
 **Flight Footprints** turns your personal flight history into a beautiful, interactive 3D globe. Import a simple CSV of your flights (flight number, origin, destination, time) and instantly get a 航旅纵横-style flight logbook: a chronological flight list, live statistics, animated route highlighting, and a cinematic trip replay — all rendered on a WebGL Earth.
 
-Your data never leaves your device. Imported flights are persisted in the browser's `localStorage`, so reopening the page restores your logbook automatically.
+Your data never leaves your device. Imported flights are persisted in the browser's `localStorage` only for the current session; each time you open the page you start fresh and can import a new CSV.
 
 ## ✨ Core Features
 * **📒 Personal Flight Logbook:** A clean side panel lists every flight as a card — flight number, route (IATA ✈ IATA), date, departure time, estimated duration and distance. Sort by time or by distance.
 * **📊 Live Statistics:** Total flights, total distance (km, great-circle / Haversine), total flight time, and airports visited — recomputed instantly on import.
 * **🎯 Route Highlight & Focus:** Click any flight to highlight its arc in gold, dim the rest, and smoothly fly the camera to frame that route. A detail card shows the full airport names, date, duration and distance.
 * **▶ Trip Replay:** Play your flights back chronologically as an animated timeline — the globe follows each leg with a flowing "aircraft" dash animation.
-* **💾 Local-Only Persistence (localStorage):** Flights are saved in your browser only and restored on next visit. Import appends with automatic de-duplication. **Nothing is ever uploaded.**
+* **💾 Local-Only Persistence (localStorage):** Flights are saved in your browser only while the page is open. Each new CSV import replaces the previous data, so old tracks are not carried over. **Nothing is ever uploaded.**
 * **🌍 Fully Offline Globe:** Local Earth textures + 10m-resolution TopoJSON province boundaries. No map API keys, no network tiles.
 * **🔍 Semantic Zoom (LOD):** Airport labels and province borders fade in/out based on camera altitude.
+* **🛫 Airport Route Filter:** Select any airport to display only flights departing from it, or only flights arriving at it.
 * **🛠️ Classic Console:** Theme switch (Satellite / Dark), 3D globe ⇄ 2D map projection, layer toggles, Earth auto-rotation, airport search, and high-res PNG snapshot export.
 * **🌐 Bilingual UI:** Full Chinese / English interface.
 
@@ -57,16 +58,17 @@ Actively developed. Contributions and feedback are welcome!
 ## 📖 项目简介
 **飞行足迹** 把你的个人飞行历史变成一颗精美的交互式 3D 地球。导入一份简单的航班 CSV（航班号、出发地、目的地、时间），即可获得「航旅纵横」式的飞行记录簿：按时间排列的航班清单、实时统计、航线高亮动画，以及电影感的行程回放 —— 全部渲染在 WebGL 地球上。
 
-你的数据绝不离开本机。导入的航班会持久化到浏览器 `localStorage`，下次打开页面自动恢复记录簿。
+你的数据绝不离开本机。导入的航班仅在当前会话期间保存在浏览器 `localStorage`，每次打开页面都会从空白开始，需要重新导入新的 CSV。
 
 ## ✨ 核心功能
 * **📒 个人飞行记录簿：** 左侧卡片式清单展示每一程 —— 航班号、航线（IATA ✈ IATA）、日期、起飞时间、估算时长与里程。支持按时间/按里程排序。
 * **📊 实时统计：** 飞行次数、总里程（km，大圆/Haversine）、总飞行时长、到达机场数，导入即算。
 * **🎯 航线高亮与聚焦：** 点击任一航班，该航线金黄高亮、其余变暗，镜头平滑飞过去框住整条航线；详情卡展示机场全称、日期、时长与里程。
 * **▶ 行程回放：** 按时间顺序把航班逐条回放成动画时间线，地球跟随每一程，带流动的「飞机划过」虚线效果。
-* **💾 纯本地持久化（localStorage）：** 航班只存在浏览器里，下次访问自动恢复。导入为追加模式并自动去重。**绝不上传任何数据。**
+* **💾 纯本地持久化（localStorage）：** 航班仅在当前页面打开期间保存在浏览器里。每次导入新的 CSV 都会替换旧轨迹，不再保留老数据。**绝不上传任何数据。**
 * **🌍 纯离线地球：** 本地地球贴图 + 10m 级 TopoJSON 省界。无需地图 API Key、无网络瓦片。
 * **🔍 智能缩放 (LOD)：** 机场标签与省界随视角高度动态显隐。
+* **🛫 机场航线筛选：** 选择任意机场，可只显示从该机场起飞的航班，或只显示降落在该机场的航班。
 * **🛠️ 经典控制台：** 主题切换（卫星/暗色）、3D 地球 ⇄ 2D 展开图、图层控制、地球自转、机场搜索、高清 PNG 截图导出。
 * **🌐 中英双语界面。**
 

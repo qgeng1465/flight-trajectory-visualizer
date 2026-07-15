@@ -27,6 +27,7 @@
         input[type="file"]::-webkit-file-upload-button { cursor: pointer; }
         button { cursor: pointer; transition: 0.2s; margin-top: 5px; }
         button:hover { border-color: #00ff88; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; border-color: #333; color: #777; }
         #sys-msg { font-size: 11px; color: #ffb86c; margin-top: 10px; font-family: monospace; line-height: 1.5; background: #111; padding: 8px; border-radius: 4px; border: 1px solid #333; }
         .active { border-color: #00ff88; color: #00ff88; }
         .flex { display: flex; gap: 5px; margin-bottom: 10px; }
@@ -46,9 +47,11 @@
         .stat-label { font-size: 10px; color: #999; margin-top: 5px; }
         .stat-unit { color: #00ff88; }
 
-        /* ===== 排序 / 回放 按钮 ===== */
+        /* ===== 排序 / 回放 / 机场筛选 按钮 ===== */
         .sort-btn { flex: 1; margin-top: 0; }
         .sort-btn.active { border-color: #00ff88; color: #00ff88; background: rgba(0,255,136,0.1); }
+        .filter-btn { flex: 1; margin-top: 0; }
+        .filter-btn.active { border-color: #00ccff; color: #00ccff; background: rgba(0,204,255,0.08); }
         #btn-replay { border-color: #ffcc00; color: #ffcc00; }
         #btn-replay:hover { background: rgba(255,204,0,0.12); }
         #btn-stop { border-color: #ff5555; color: #ff5555; }
@@ -89,7 +92,7 @@
         .detail-close:hover { border-color: #ff5555 !important; color: #ff5555 !important; }
 
         #canvas2d { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
-        #globeViz { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2; transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        #globeViz { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2; transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1); touch-action: none; }
     </style>
 </head>
 <body>
@@ -125,6 +128,16 @@
         </div>
 
         <div id="flight-list"></div>
+
+        <div class="group">
+            <label id="l-airport">机场航线筛选</label>
+            <select id="airport-select"><option value="" id="opt-airport">选择机场...</option></select>
+            <div class="flex" style="margin-top:6px;">
+                <button id="btn-dep" class="filter-btn" onclick="setAirportFilter('dep')">起飞航班</button>
+                <button id="btn-arr" class="filter-btn" onclick="setAirportFilter('arr')">降落航班</button>
+            </div>
+            <button id="btn-reset-airport" onclick="clearAirportFilter()" disabled>重置筛选</button>
+        </div>
 
         <div class="group">
             <label id="l-search">机场搜索</label>
@@ -183,6 +196,7 @@
     <div id="globeViz"></div>
 
     <!-- 先加载本地内置库；若本地缺失则静默回退 CDN（异步），主脚本会做可用性检查 -->
+    <script src="libs/three.min.js"></script>
     <script src="libs/globe.gl.min.js"></script>
     <script src="libs/papaparse.min.js"></script>
     <script src="libs/topojson-client.min.js"></script>
@@ -190,10 +204,11 @@
     <script>
     (function(){
         const libs = [
-            {name:'Globe', cdn:'https://unpkg.com/globe.gl@2.25.3/dist/globe.gl.min.js'},
-            {name:'Papa', cdn:'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js'},
-            {name:'topojson', cdn:'https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js'},
-            {name:'Stats', cdn:'https://cdnjs.cloudflare.com/ajax/libs/stats.js/16/Stats.min.js'}
+            {name:'THREE', file:'libs/three.min.js', cdn:'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'},
+            {name:'Globe', file:'libs/globe.gl.min.js', cdn:'https://unpkg.com/globe.gl@2.25.3/dist/globe.gl.min.js'},
+            {name:'Papa', file:'libs/papaparse.min.js', cdn:'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js'},
+            {name:'topojson', file:'libs/topojson-client.min.js', cdn:'https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js'},
+            {name:'Stats', file:'libs/Stats.min.js', cdn:'https://cdnjs.cloudflare.com/ajax/libs/stats.js/16/Stats.min.js'}
         ];
         libs.forEach(l => {
             if (window[l.name]) return;
@@ -209,28 +224,28 @@
         statsObj.dom.style.position = 'absolute'; statsObj.dom.style.right = '15px'; statsObj.dom.style.bottom = '15px'; statsObj.dom.style.transform = 'scale(1.2)';
         statsObj.dom.style.zIndex = '100';
         document.body.appendChild(statsObj.dom);
-        // 轻量 rAF 循环：只跑 stats 与看门狗；真正昂贵的 globe.gl 内部渲染由 pauseAnimation 休眠
+
+        // 轻量 rAF 循环：持续运行，确保交互/动画不卡顿
         function animate() {
-            requestAnimationFrame(animate); // 先排下一帧：即使本帧抛错，看门狗循环也永不中断
+            requestAnimationFrame(animate);
             try {
                 statsObj.update();
+                // 自转由我们自己驱动，避免依赖 OrbitControls
+                if (autoRotateSpeed > 0 && !isDragging && !replaying && !selectedId && !filterAirport) {
+                    const pov = world.pointOfView();
+                    world.pointOfView({ lat: pov.lat, lng: pov.lng + autoRotateSpeed * 0.025, altitude: pov.altitude });
+                }
+                // 自适应渲染像素比
                 const now = performance.now();
-                // P1 看门狗：有活动才渲染，静止时暂停 globe.gl 内部渲染循环
-                const active = world.controls().autoRotate || replaying || selectedId !== null || now < renderUntil;
-                if (!active && !paused) { world.pauseAnimation(); paused = true; }
-                else if (active && paused) { world.resumeAnimation(); paused = false; }
-                // P2 自适应渲染像素比：仅在地球实际渲染时采样 FPS（贴图永远满分辨率）
-                if (!paused) {
-                    _fpsFrames++;
-                    if (now - _fpsLast >= 500) {
-                        const fps = _fpsFrames * 1000 / (now - _fpsLast);
-                        _fpsFrames = 0; _fpsLast = now;
-                        if (fps < 40) { _prLo++; _prHi = 0; if (_prLo >= 2 && currentPR > 0.75) { currentPR = Math.max(0.75, +(currentPR - 0.25).toFixed(2)); applyPR(); _prLo = 0; } }
-                        else if (fps > 57) { _prHi++; _prLo = 0; if (_prHi >= 2 && currentPR < TARGET_PR) { currentPR = Math.min(TARGET_PR, +(currentPR + 0.25).toFixed(2)); applyPR(); _prHi = 0; } }
-                        else { _prLo = 0; _prHi = 0; }
-                    }
-                } else { _fpsFrames = 0; _fpsLast = now; }
-            } catch (e) { /* 吞掉异常，保证渲染看门狗永不中断 */ }
+                _fpsFrames++;
+                if (now - _fpsLast >= 500) {
+                    const fps = _fpsFrames * 1000 / (now - _fpsLast);
+                    _fpsFrames = 0; _fpsLast = now;
+                    if (fps < 40) { _prLo++; _prHi = 0; if (_prLo >= 2 && currentPR > 0.75) { currentPR = Math.max(0.75, +(currentPR - 0.25).toFixed(2)); applyPR(); _prLo = 0; } }
+                    else if (fps > 57) { _prHi++; _prLo = 0; if (_prHi >= 2 && currentPR < TARGET_PR) { currentPR = Math.min(TARGET_PR, +(currentPR + 0.25).toFixed(2)); applyPR(); _prHi = 0; } }
+                    else { _prLo = 0; _prHi = 0; }
+                }
+            } catch (e) { /* 吞掉异常，保证看门狗永不中断 */ }
         }
         requestAnimationFrame(animate);
 
@@ -240,6 +255,17 @@
         let cLabelState = -1, cPolyState = -1;
         let hasData = false;
         let rawArcs = [], rawHubs = [], renderArcs = [], renderHubs = [];
+        let arrivalCounts = new Map();   // 每个机场的抵达次数（用于光斑强度）
+        let glowData = [];               // 3D 光斑 custom layer 数据
+        let glowTextureCache = {};       // 按颜色缓存光斑贴图
+
+        // ===== 机场航线筛选状态 =====
+        let filterAirport = null;        // 当前选中的机场 IATA
+        let filterMode = null;           // 'dep' | 'arr'
+
+        // ===== 自定义地球鼠标交互状态 =====
+        let isDragging = false, dragStartX = 0, dragStartY = 0, dragHasMoved = false;
+        let autoRotateSpeed = 0;
 
         // ===== 飞行记录簿状态 =====
         let flights = [];          // 主数据（已 enrich），canonical 按时间升序
@@ -249,7 +275,7 @@
         const LS_KEY = 'flightTracker.flights';
         const HL_COLOR = '#ffcc00';
         const DIM_COLOR = 'rgba(140,140,140,0.16)';
-        const MAX_IDLE_LABELS = 200; // P3：无飞行数据时标签数量封顶
+        const MAX_IDLE_LABELS = 200;
 
         // ===== 多语言字典 =====
         const i18n = {
@@ -257,6 +283,10 @@
                 pageTitle: '✈ 我的飞行足迹', uiTitle: '控制台',
                 lSearch: '机场搜索', searchPh: '输入 纽约, new york, pvg...',
                 lFile: '导入航线数据 (.csv)', lTheme: '地图主题', lView: '图层控制', lRotate: '自转速度',
+                lAirport: '机场航线筛选', selAirport: '选择机场...',
+                btnDep: '起飞航班', btnArr: '降落航班', resetFilter: '重置筛选',
+                filterDep: '从 {ap} 起飞的所有航班', filterArr: '降落在 {ap} 的所有航班',
+                filterCount: '（{n} 条）',
                 btnProj2d: '▤ 切换为 2D 展开图', btnProj3d: '▤ 恢复 3D 视图',
                 snap3d: '📸 3D 截图', snap2d: '📸 2D 截图', clear: '清除数据',
                 themeColor: '卫星遥感 (Color)', themeDark: '暗色流向 (Dark)',
@@ -271,8 +301,7 @@
                 noMatch: '无匹配机场', badgeL: '大型', badgeM: '中型',
                 confirmClear: '确定要清除所有飞行记录吗？此操作会同时清空本地存储，且不可撤销。',
                 cleared: '数据已清除，已恢复全域节点显示。',
-                importMsg: '✅ 新增 {a} 条，重复 {d} 条已跳过，无效 {i} 条。当前共 {t} 条航班。',
-                restored: '✅ 已从本地恢复 {n} 条飞行记录。',
+                importMsg: '✅ 已导入 {a} 条航班，无效 {i} 条。当前共 {t} 条航班。',
                 noReplay: '没有可回放的航班，请先导入飞行 CSV。',
                 focused: '📍 已定位机场'
             },
@@ -280,6 +309,10 @@
                 pageTitle: '✈ My Flight Footprints', uiTitle: 'Console',
                 lSearch: 'Airport Search', searchPh: 'type new york, pvg...',
                 lFile: 'Import flight data (.csv)', lTheme: 'Map Theme', lView: 'Layers', lRotate: 'Rotation',
+                lAirport: 'Airport Route Filter', selAirport: 'Select airport...',
+                btnDep: 'Departures', btnArr: 'Arrivals', resetFilter: 'Reset Filter',
+                filterDep: 'All flights departing from {ap}', filterArr: 'All flights arriving at {ap}',
+                filterCount: '({n} flights)',
                 btnProj2d: '▤ Switch to 2D Map', btnProj3d: '▤ Back to 3D Globe',
                 snap3d: '📸 3D Shot', snap2d: '📸 2D Shot', clear: 'Clear Data',
                 themeColor: 'Satellite (Color)', themeDark: 'Dark Flow (Dark)',
@@ -294,19 +327,18 @@
                 noMatch: 'No matching airport', badgeL: 'Large', badgeM: 'Medium',
                 confirmClear: 'Clear all flight records? This also wipes local storage and cannot be undone.',
                 cleared: 'Data cleared. Restored full node display.',
-                importMsg: '✅ Added {a}, skipped {d} duplicates, {i} invalid. {t} flights total.',
-                restored: '✅ Restored {n} flight records from local storage.',
+                importMsg: '✅ Imported {a} flights, {i} invalid. {t} flights total.',
                 noReplay: 'No flights to replay. Import a flight CSV first.',
                 focused: '📍 Airport located'
             }
         };
 
         const T = {
-            color: { img: './earth-color.jpg', arcN: '#00ffff', arcH: '#ff0055', pFill: 'rgba(255,255,255,0.08)', pStrk: 'rgba(255,255,255,0.6)', bg: 'rgba(0,0,0,0.7)', text: '#fff', border: 'transparent', atmos: '#3a80df', mapBg: '#051329' },
-            dark:  { img: './earth-dark.jpg',  arcN: '#00ff88', arcH: '#ff0055', pFill: 'rgba(0,255,136,0.02)',  pStrk: 'rgba(68,68,68,0.8)', bg: 'rgba(0,0,0,0.8)', text: '#00ff88', border: '#00ff88', atmos: '#00ff88', mapBg: '#020202' }
+            color: { img: './earth-color.jpg', arcN: '#00ffff', arcH: '#ff0055', glow: '#ffcc00', pFill: 'rgba(255,255,255,0.08)', pStrk: 'rgba(255,255,255,0.6)', bg: 'rgba(0,0,0,0.7)', text: '#fff', border: 'transparent', atmos: '#3a80df', mapBg: '#051329' },
+            dark:  { img: './earth-dark.jpg',  arcN: '#00ff88', arcH: '#ff0055', glow: '#00ff88', pFill: 'rgba(0,255,136,0.02)',  pStrk: 'rgba(68,68,68,0.8)', bg: 'rgba(0,0,0,0.8)', text: '#00ff88', border: '#00ff88', atmos: '#00ff88', mapBg: '#020202' }
         };
 
-        // P4：2D 大图懒加载——启动不预载，首次进入 2D / 切换主题时才下载解码（贴图本身仍是原图）
+        // P4：2D 大图懒加载——启动不预载，首次进入 2D / 切换主题时才下载解码
         const img2DColor = new Image(), img2DDark = new Image();
         const img2DReq = { color: false, dark: false };
         function ensure2DImage(theme) {
@@ -343,9 +375,8 @@
         // ==========================================
         // 3D WebGL 引擎配置
         // ==========================================
-        // preserveDrawingBuffer:false —— 避免每帧整帧缓冲拷贝（与 MSAA 叠加是卡顿主因），画质无损；
-        // 截图由 exportSnapshot 同步 render→toDataURL 完成，无需保留缓冲。
         const world = Globe({ rendererConfig: { antialias: true, alpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' } })(document.getElementById('globeViz'));
+        window.world = world; // 便于调试与外部测试
 
         world.globeImageUrl(T[curTheme].img);
         world.bumpImageUrl('./earth-topology.png');
@@ -354,18 +385,100 @@
         world.atmosphereColor(T[curTheme].atmos);
         world.atmosphereAltitude(0.15);
 
+        // 自定义鼠标/触摸交互：滚轮缩放 + 拖拽旋转
+        // 由于 globe.gl 内置 OrbitControls 在某些环境下对滚轮/拖拽不敏感，
+        // 这里直接用 pointer/wheel 事件驱动 pointOfView，保证最基础的自由操作一定可用。
+        function configureControls() {
+            const ctrl = world.controls();
+            if (!ctrl) return;
+            // 关闭内置 manual 交互，避免与自定义控制冲突
+            ctrl.enableZoom = false;
+            ctrl.enableRotate = false;
+            ctrl.enablePan = false;
+            ctrl.autoRotate = false;
+            ctrl.minDistance = 120;
+            ctrl.maxDistance = 12000;
+        }
+        configureControls();
+
+        const globeContainer = document.getElementById('globeViz');
+        const ROTATE_SENSITIVITY = 0.18;
+        const ZOOM_SENSITIVITY = 0.0012;
+        const MIN_ALTITUDE = 0.25;
+        const MAX_ALTITUDE = 12;
+        const DRAG_THRESHOLD = 5;
+
+        function setupCustomInteraction() {
+            if (!globeContainer) return;
+            globeContainer.style.cursor = 'grab';
+
+            function onPointerDown(e) {
+                if (is2DMode) return;
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
+                dragHasMoved = false;
+                dragStartX = e.clientX; dragStartY = e.clientY;
+                isDragging = true;
+                try { globeContainer.setPointerCapture(e.pointerId); } catch (_) {}
+                globeContainer.style.cursor = 'grabbing';
+                keepRendering(2000);
+            }
+            function onPointerMove(e) {
+                if (!isDragging || is2DMode) return;
+                const dx = e.clientX - dragStartX;
+                const dy = e.clientY - dragStartY;
+                if (!dragHasMoved) {
+                    if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+                    dragHasMoved = true;
+                }
+                const pov = world.pointOfView();
+                const lat = Math.max(-90, Math.min(90, pov.lat - dy * ROTATE_SENSITIVITY));
+                const lng = pov.lng - dx * ROTATE_SENSITIVITY;
+                world.pointOfView({ lat, lng, altitude: pov.altitude });
+                dragStartX = e.clientX; dragStartY = e.clientY;
+                keepRendering(200);
+            }
+            function onPointerUp(e) {
+                isDragging = false;
+                try { globeContainer.releasePointerCapture(e.pointerId); } catch (_) {}
+                globeContainer.style.cursor = 'grab';
+            }
+            function onWheel(e) {
+                if (is2DMode) return;
+                e.preventDefault();
+                const pov = world.pointOfView();
+                const factor = 1 + e.deltaY * ZOOM_SENSITIVITY;
+                const altitude = Math.max(MIN_ALTITUDE, Math.min(MAX_ALTITUDE, pov.altitude * factor));
+                world.pointOfView({ lat: pov.lat, lng: pov.lng, altitude });
+                keepRendering(500);
+            }
+            globeContainer.addEventListener('pointerdown', onPointerDown);
+            globeContainer.addEventListener('pointermove', onPointerMove);
+            globeContainer.addEventListener('pointerup', onPointerUp);
+            globeContainer.addEventListener('pointercancel', onPointerUp);
+            globeContainer.addEventListener('wheel', onWheel, { passive: false });
+        }
+        setupCustomInteraction();
+
+        // 机场标签：默认显示 IATA；放大后由 upd() 切换为 IATA + 名称
         world.labelLat(d => d.lt);
         world.labelLng(d => d.lg);
-        world.labelText(d => d.iata);
+        world.labelText(d => d._labelText || d.iata);
         world.labelDotRadius(d => d._dotR);
         world.labelColor(d => d._labelColor);
         world.labelResolution(3);
 
+        // 点击机场标签可进入该机场的航线筛选
+        world.onLabelClick((d, ev, coords) => { if (d && d.iata && d.v > 0) selectAirport(d.iata); });
+
         function enrichHubs(hubs) {
             hubs.forEach(d => {
-                const base = d.isLarge ? 0.20 : 0.12;
-                d._dotR = base + Math.min(d.v * 0.05, 0.6);
-                const alpha = Math.min(0.4 + (d.v * 0.15), 1.0);
+                // 活跃机场用光斑替代白色圆点，标签处不再显示白色圆点
+                if (d.v > 0) {
+                    d._dotR = 0;
+                } else {
+                    d._dotR = d.isLarge ? 0.12 : 0.08;
+                }
+                const alpha = d.v > 0 ? Math.min(0.85 + (d.v * 0.08), 1.0) : Math.min(0.35 + (d.v * 0.15), 0.9);
                 d._labelColor = `rgba(255, 255, 255, ${alpha})`;
             });
         }
@@ -408,31 +521,71 @@
         world.polygonStrokeColor(() => T[curTheme].pStrk);
         world.polygonLabel(d => `<div style="background:${T[curTheme].bg}; padding:4px; border-radius:4px; color:${T[curTheme].text}; border:1px solid ${T[curTheme].border};"><b>${lang === 'zh' ? (d.properties.name_zh || d.properties.name) : d.properties.name}</b></div>`);
 
+        // ===== 3D 光斑层（到达机场） =====
+        function getGlowTexture(color) {
+            if (glowTextureCache[color]) return glowTextureCache[color];
+            const c = document.createElement('canvas');
+            c.width = 128; c.height = 128;
+            const ctx = c.getContext('2d');
+            const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+            g.addColorStop(0, color);
+            g.addColorStop(0.35, color);
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, 128, 128);
+            const tex = new THREE.CanvasTexture(c);
+            tex.needsUpdate = true;
+            glowTextureCache[color] = tex;
+            return tex;
+        }
+
+        function createGlowMaterial(color) {
+            return new THREE.SpriteMaterial({
+                map: getGlowTexture(color),
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.85,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+        }
+
+        if (typeof THREE !== 'undefined') {
+            world.customThreeObject(d => {
+                const sprite = new THREE.Sprite(createGlowMaterial(d.color));
+                sprite.scale.set(d.scale, d.scale, 1);
+                return sprite;
+            });
+            world.customThreeObjectUpdate((obj, d) => {
+                obj.scale.set(d.scale, d.scale, 1);
+                const desired = d.color;
+                if (obj.material.userData.lastColor !== desired) {
+                    obj.material.map = getGlowTexture(desired);
+                    obj.material.userData.lastColor = desired;
+                }
+            });
+        }
+
         // ===== P1/P2 渲染调度：按需渲染 + 自适应像素比 =====
-        let renderUntil = 0, paused = false;              // 按需渲染状态
-        const TARGET_PR = Math.min(window.devicePixelRatio || 1, 2); // 上限 2：视网膜无画质损失，只阻止 >2 倍浪费超采样
+        let renderUntil = 0, paused = false;
+        const TARGET_PR = Math.min(window.devicePixelRatio || 1, 2);
         let currentPR = TARGET_PR;
         let _fpsLast = performance.now(), _fpsFrames = 0, _prLo = 0, _prHi = 0;
 
         function keepRendering(ms = 1500) {
+            // 已不再暂停内部渲染循环，此函数保留供兼容性调用
             renderUntil = Math.max(renderUntil, performance.now() + ms);
-            if (paused) { world.resumeAnimation(); paused = false; }
         }
         function applyPR() {
             world.renderer().setPixelRatio(currentPR);
             world.width(window.innerWidth);
             world.height(window.innerHeight);
         }
-        // 相机过渡包装：保证过渡动画期间渲染循环在线
-        function flyTo(pov, ms) { keepRendering((ms || 0) + 400); world.pointOfView(pov, ms); }
+        // 相机过渡包装
+        function flyTo(pov, ms) { world.pointOfView(pov, ms); }
 
         world.renderer().setPixelRatio(TARGET_PR);
 
-        // 交互活动 -> 唤醒渲染
-        const _ctrl = world.controls();
-        _ctrl.addEventListener('start', () => keepRendering(1500));
-        _ctrl.addEventListener('change', () => keepRendering(350));
-        _ctrl.addEventListener('end', () => keepRendering(900));
         ['wheel', 'pointerdown', 'touchstart'].forEach(ev =>
             window.addEventListener(ev, () => keepRendering(1500), { passive: true }));
 
@@ -483,8 +636,9 @@
             const getY = lat => offsetY + (90 - lat) * (mapH / 180);
 
             const v = document.getElementById('vMode').value;
+            const arcs = getFilteredArcs();
             if (v !== 'hub') {
-                const drawArc = (arc) => {
+                arcs.forEach(arc => {
                     ctx.beginPath();
                     const isSel = selectedId && arc._fid === selectedId;
                     ctx.strokeStyle = isSel ? HL_COLOR : (selectedId ? 'rgba(120,120,120,0.28)' : arc._color);
@@ -493,17 +647,38 @@
                     ctx.moveTo(getX(arc.startLng), getY(arc.startLat));
                     ctx.lineTo(getX(arc.endLng), getY(arc.endLat));
                     ctx.stroke();
-                };
-                renderArcs.forEach(drawArc);
+                });
             }
 
+            const hubs = getFilteredHubs();
             if (v !== 'arc') {
-                renderHubs.forEach(hub => {
+                hubs.forEach(hub => {
+                    const cx = getX(hub.lg), cy = getY(hub.lt);
+                    // 光斑（按抵达次数）
+                    const ac = arrivalCounts.get(hub.iata) || 0;
+                    if (ac > 0) {
+                        const r = 4 + ac * 2.5;
+                        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+                        g.addColorStop(0, T[curTheme].glow);
+                        g.addColorStop(0.5, T[curTheme].glow);
+                        g.addColorStop(1, 'rgba(0,0,0,0)');
+                        ctx.fillStyle = g;
+                        ctx.globalAlpha = 0.7;
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+                        ctx.fill();
+                    }
+                    // 小中心点
+                    ctx.globalAlpha = 1.0;
                     ctx.beginPath();
-                    ctx.fillStyle = hub._labelColor;
-                    const radius = Math.max(2.5, 2.5 + Math.min(hub.v * 1.5, 6));
-                    ctx.arc(getX(hub.lg), getY(hub.lt), radius, 0, 2 * Math.PI);
+                    ctx.fillStyle = hub.iata === filterAirport ? '#00ccff' : '#fff';
+                    ctx.arc(cx, cy, 2.2, 0, 2 * Math.PI);
                     ctx.fill();
+
+                    // 机场名称
+                    ctx.fillStyle = hub.iata === filterAirport ? '#00ccff' : 'rgba(255,255,255,0.9)';
+                    ctx.font = '11px system-ui';
+                    ctx.fillText(`${hub.iata} · ${hub.n}`, cx + 6, cy + 3);
                 });
             }
             ctx.globalAlpha = 1.0;
@@ -513,7 +688,7 @@
             is2DMode = !is2DMode;
             const c = document.getElementById('canvas2d'), g = document.getElementById('globeViz'), btn = document.getElementById('btnProj');
             if (is2DMode) {
-                ensure2DImage(curTheme); // 首次进入 2D 才下载大图
+                ensure2DImage(curTheme);
                 draw2DCanvas();
                 c.style.opacity = 1; c.style.pointerEvents = 'auto';
                 g.style.opacity = 0; g.style.pointerEvents = 'none';
@@ -535,6 +710,7 @@
             world.atmosphereColor(T[curTheme].atmos);
             enrichArcs();
             enrichHubs(renderHubs);
+            updateGlowData();
             world.polygonCapColor(() => T[curTheme].pFill);
             world.polygonStrokeColor(() => T[curTheme].pStrk);
             if (isProvsOK) {
@@ -547,7 +723,11 @@
         }
 
         async function init() {
-            keepRendering(4000); // 启动期保持渲染：地球出现 + localStorage 恢复动画播完后再休眠
+            keepRendering(4000);
+            // 每次进入都是新会话，不恢复旧 CSV 轨迹
+            try { localStorage.removeItem(LS_KEY); } catch (e) { /* ignore */ }
+            flights = []; selectedId = null; filterAirport = null; filterMode = null;
+
             if (typeof Papa === 'undefined') { msg('❌ CSV 解析库未能加载，请检查网络后刷新页面', 'red'); return; }
             Papa.parse("./optimized_airports.csv", {
                 download: true, header: true, skipEmptyLines: true, fastMode: true,
@@ -560,25 +740,18 @@
                                 if (item.isLarge) largeCities.push(item);
                             }
                         });
-                        // P3：启动不创建任何标签精灵；无数据时的封顶标签集（大步长抽样，保证地理分布）
                         const stride = Math.max(1, Math.ceil(largeCities.length / MAX_IDLE_LABELS));
                         idleCities = largeCities.filter((_, i) => i % stride === 0);
                         enrichHubs(allCities);
                         renderHubs = allCities;
                         world.labelsData([]);
+                        world.customLayerData([]);
                         isAirportsOK = true;
 
-                        // 从 localStorage 恢复飞行记录
-                        flights = loadFlightsFromStorage();
-                        sortFlightsAsc();
-                        if (flights.length) {
-                            rebuildFromFlights(); overviewPOV();
-                            msg(i18n[lang].restored.replace('{n}', flights.length), '#00ff88');
-                        } else {
-                            updateStats(); renderFlightList();
-                            // 关键修复：无数据时也必须更新状态，否则会一直卡在「内核启动中」
-                            msg(lang === 'zh' ? '✅ 就绪 · 导入飞行 CSV 开始记录足迹' : '✅ Ready · import a flight CSV to begin', '#00ff88');
-                        }
+                        updateStats();
+                        renderFlightList();
+                        buildAirportSelect();
+                        msg(lang === 'zh' ? '✅ 就绪 · 导入飞行 CSV 开始记录足迹' : '✅ Ready · import a flight CSV to begin', '#00ff88');
                         upd();
                     } catch (e) {
                         console.error('init error', e);
@@ -589,7 +762,7 @@
             });
         }
 
-        // P4：省界懒加载——首次需要显示时才 fetch + 解析，之后全精度照常渲染
+        // P4：省界懒加载——首次需要显示时才 fetch + 解析
         function loadProvinces() {
             if (isProvsOK || provsLoading) return;
             provsLoading = true;
@@ -605,19 +778,25 @@
             const alt = world.pointOfView().altitude;
             if (isAirportsOK && !is2DMode) {
                 if (hasData) {
-                    if (cLabelState !== 'data_locked') {
-                        cLabelState = 'data_locked';
+                    // 0=不显示 1=只显示 IATA 2=显示 IATA + 名称
+                    let tLabel = alt > 1.6 ? 0 : (alt > 0.7 ? 1 : 2);
+                    if (cLabelState !== tLabel) {
+                        cLabelState = tLabel;
                         const v = document.getElementById('vMode').value;
-                        world.labelsData(v === 'arc' ? [] : renderHubs);
-                        world.labelSize(0.18);
+                        const hubs = getFilteredHubs();
+                        if (tLabel === 0) {
+                            world.labelsData([]);
+                        } else {
+                            hubs.forEach(d => { d._labelText = (tLabel === 2 && d.n) ? `${d.iata} · ${d.n}` : d.iata; });
+                            world.labelsData(v === 'arc' ? [] : hubs.slice());
+                            world.labelSize(tLabel === 1 ? 0.16 : 0.22);
+                        }
                         keepRendering(1200);
                     }
                 } else {
                     let tLabel = alt > 1.5 ? 0 : (alt > 0.6 ? 1 : 2);
                     if (tLabel !== cLabelState) {
                         cLabelState = tLabel;
-                        // P3：中景（最常用）只显示封顶后的主要枢纽 idleCities（≤200 个）；
-                        // 只有刻意放到最近时才显示全部大型机场，保证任意机型都流畅
                         const displayData = tLabel === 0 ? [] : (tLabel === 1 ? idleCities : largeCities);
                         world.labelsData(displayData);
                         world.labelSize(tLabel === 1 ? 0.20 : 0.12);
@@ -627,7 +806,7 @@
             }
             if (!is2DMode) {
                 let tPoly = alt < 1.6 ? 1 : 0;
-                if (tPoly === 1 && !isProvsOK) loadProvinces(); // P4：首次需要时才加载省界
+                if (tPoly === 1 && !isProvsOK) loadProvinces();
                 if (isProvsOK && tPoly !== cPolyState) {
                     cPolyState = tPoly;
                     world.polygonsData(tPoly === 1 ? provs : []);
@@ -637,22 +816,26 @@
         }
 
         // ==========================================
-        // CSV 导入（鲁棒解析 + 追加 + 去重 + 持久化）
+        // CSV 导入（每次新 CSV 替换旧数据）
         // ==========================================
         function onFileChosen(e) {
             const file = e.target.files[0]; if (!file) return;
             importFlights(file);
-            e.target.value = ''; // 允许重复导入同一文件
+            e.target.value = '';
         }
 
         function importFlights(file) {
             msg(i18n[lang].sLabel, "#00ffff");
+            // 新 CSV 替换旧轨迹
+            stopReplay();
+            clearAirportFilter(false);
+            flights = [];
+            selectedId = null;
+            hideDetail();
             Papa.parse(file, {
                 header: true, skipEmptyLines: true, fastMode: true,
                 complete: function (r) {
-                    const wasEmpty = flights.length === 0;
-                    const seen = new Set(flights.map(f => f.key));
-                    let added = 0, dup = 0, invalid = 0;
+                    let added = 0, invalid = 0;
                     r.data.forEach(row => {
                         const norm = {};
                         for (const k in row) { if (Object.prototype.hasOwnProperty.call(row, k)) norm[String(k).toLowerCase().trim()] = row[k]; }
@@ -662,31 +845,30 @@
                         const time = pick(norm, ['time', 'dep_time', 'departure', 'date']);
                         const f = makeFlight(flight_id, origin, dest, time);
                         if (!f) { invalid++; return; }
-                        if (seen.has(f.key)) { dup++; return; }
-                        seen.add(f.key); flights.push(f); added++;
+                        flights.push(f); added++;
                     });
                     sortFlightsAsc();
                     persistFlights();
                     selectedId = null;
                     rebuildFromFlights();
-                    if (wasEmpty && flights.length) overviewPOV();
-                    msg(importResultText(added, dup, invalid), added > 0 ? '#00ff88' : '#ffb86c');
+                    if (flights.length) overviewPOV();
+                    msg(importResultText(added, invalid), added > 0 ? '#00ff88' : '#ffb86c');
                 },
                 error: function (err) { msg(`解析错误 / Parse error - ${err.message}`, "red"); }
             });
         }
 
-        function importResultText(a, d, i) {
-            return i18n[lang].importMsg.replace('{a}', a).replace('{d}', d).replace('{i}', i).replace('{t}', flights.length);
+        function importResultText(a, i) {
+            return i18n[lang].importMsg.replace('{a}', a).replace('{i}', i).replace('{t}', flights.length);
         }
 
         // 构造并 enrich 一条航班记录；无效则返回 null
         function makeFlight(flight_id, origin, dest, time) {
             if (!origin || !dest || origin === dest) return null;
             const o = db[origin], d = db[dest];
-            if (!o || !d) return null; // 机场缺失坐标 -> 过滤
+            if (!o || !d) return null;
             const dist = haversineKm(o, d);
-            const dur = dist / 850 + 0.5; // 起降冗余 0.5h
+            const dur = dist / 850 + 0.5;
             const ts = time ? (Date.parse(time) || 0) : 0;
             const fid = flight_id || '—';
             const key = `${fid}|${origin}|${dest}|${time || ''}`;
@@ -697,14 +879,17 @@
 
         // 由 flights 重建弧线 / 枢纽并刷新全部 UI
         function rebuildFromFlights() {
-            const arcs = []; const hubs = new Map();
+            const arcs = [];
+            const hubs = new Map();
+            arrivalCounts = new Map();
             flights.forEach(f => {
                 const o = db[f.origin], d = db[f.dest];
                 if (!o || !d) return;
-                arcs.push({ _fid: f.key, startLat: o.lt, startLng: o.lg, endLat: d.lt, endLng: d.lg, weight: 1 });
+                arcs.push({ _fid: f.key, _origin: f.origin, _dest: f.dest, startLat: o.lt, startLng: o.lg, endLat: d.lt, endLng: d.lg, weight: 1 });
                 if (!hubs.has(o.iata)) hubs.set(o.iata, { iata: o.iata, v: 0 });
                 if (!hubs.has(d.iata)) hubs.set(d.iata, { iata: d.iata, v: 0 });
                 hubs.get(o.iata).v++; hubs.get(d.iata).v++;
+                arrivalCounts.set(f.dest, (arrivalCounts.get(f.dest) || 0) + 1);
             });
             rawArcs = arcs;
             rawHubs = Array.from(hubs.values());
@@ -713,31 +898,124 @@
             applyDataMapping();
             updateStats();
             renderFlightList();
+            buildAirportSelect();
             keepRendering(1500);
         }
 
         function applyDataMapping() {
-            renderArcs = rawArcs;
             allCities.forEach(c => c.v = 0);
+            rawHubs.forEach(h => { if (db[h.iata]) db[h.iata].v = h.v; });
             const activeNodes = [];
-            rawHubs.forEach(h => {
-                if (db[h.iata] && h.v >= 1) {
-                    db[h.iata].v = h.v;
-                    activeNodes.push(db[h.iata]);
-                }
-            });
-            enrichHubs(activeNodes);
-            renderHubs = activeNodes;
+            rawHubs.forEach(h => { if (db[h.iata] && h.v >= 1) activeNodes.push(db[h.iata]); });
+            enrichHubs(activeNodes.length ? activeNodes : allCities);
+            renderHubs = activeNodes.length ? activeNodes : allCities;
             cLabelState = -1;
             renderLayers();
         }
 
+        // ===== 机场筛选 =====
+        function buildAirportSelect() {
+            const sel = document.getElementById('airport-select');
+            if (!sel) return;
+            const cur = sel.value;
+            const active = Array.from(new Set(flights.map(f => f.origin).concat(flights.map(f => f.dest))))
+                .map(iata => db[iata]).filter(Boolean)
+                .sort((a, b) => a.iata.localeCompare(b.iata));
+            const blank = `<option value="">${i18n[lang].selAirport}</option>`;
+            sel.innerHTML = blank + active.map(a => `<option value="${esc(a.iata)}">${esc(a.iata)} · ${esc(a.n)}</option>`).join('');
+            if (cur && Array.from(sel.options).some(o => o.value === cur)) sel.value = cur;
+            else if (filterAirport) sel.value = filterAirport;
+        }
+
+        function selectAirport(iata) {
+            const a = db[iata]; if (!a) return;
+            const sel = document.getElementById('airport-select');
+            if (sel) sel.value = iata;
+            setAirportFilter('dep');
+            flyTo({ lat: a.lt, lng: a.lg, altitude: 1.6 }, 900);
+            msg(`${i18n[lang].focused} ${a.iata} · ${a.n}`, '#00ff88');
+        }
+
+        function setAirportFilter(mode) {
+            const sel = document.getElementById('airport-select');
+            const iata = sel ? sel.value : '';
+            if (!iata) { msg('请先选择一个机场 / Please select an airport first'); return; }
+            filterAirport = iata;
+            filterMode = mode;
+            selectedId = null;
+            hideDetail();
+            refreshArcStyle();
+            renderLayers();
+            updateFilterUI();
+            const a = db[iata];
+            if (a) flyTo({ lat: a.lt, lng: a.lg, altitude: 1.5 }, 900);
+            const count = getFilteredArcs().length;
+            const t = i18n[lang];
+            const tmpl = t[mode === 'dep' ? 'filterDep' : 'filterArr'];
+            msg(`${tmpl.replace('{ap}', iata)} ${t.filterCount.replace('{n}', count)}`, '#00ccff');
+        }
+
+        function clearAirportFilter(resetView = true) {
+            filterAirport = null;
+            filterMode = null;
+            const sel = document.getElementById('airport-select');
+            if (sel) sel.value = '';
+            updateFilterUI();
+            renderLayers();
+            if (resetView) overviewPOV();
+        }
+
+        function updateFilterUI() {
+            const dep = document.getElementById('btn-dep');
+            const arr = document.getElementById('btn-arr');
+            const reset = document.getElementById('btn-reset-airport');
+            if (dep) dep.classList.toggle('active', filterMode === 'dep');
+            if (arr) arr.classList.toggle('active', filterMode === 'arr');
+            if (reset) reset.disabled = !filterAirport;
+        }
+
+        function getFilteredArcs() {
+            if (!filterAirport || !filterMode) return rawArcs;
+            return rawArcs.filter(a => (filterMode === 'dep' ? a._origin === filterAirport : a._dest === filterAirport));
+        }
+
+        function getFilteredHubs() {
+            if (!filterAirport || !filterMode) return renderHubs;
+            const involved = new Set([filterAirport]);
+            getFilteredArcs().forEach(a => { involved.add(a._origin); involved.add(a._dest); });
+            const nodes = [];
+            involved.forEach(iata => { if (db[iata]) nodes.push(db[iata]); });
+            enrichHubs(nodes);
+            return nodes;
+        }
+
+        function updateGlowData() {
+            const hubs = getFilteredHubs();
+            glowData = [];
+            if (typeof THREE === 'undefined') return;
+            hubs.forEach(h => {
+                const ac = arrivalCounts.get(h.iata) || 0;
+                if (ac > 0) {
+                    glowData.push({
+                        lat: h.lt, lng: h.lg, altitude: 0.03,
+                        iata: h.iata, name: h.n, arrCount: ac,
+                        color: T[curTheme].glow,
+                        scale: 2.0 + ac * 0.9
+                    });
+                }
+            });
+            world.customLayerData(glowData);
+        }
+
         function renderLayers() {
             const v = document.getElementById('vMode').value;
-            world.arcsData(v === 'hub' ? [] : renderArcs);
+            const arcs = getFilteredArcs();
+            const hubs = getFilteredHubs();
+            world.arcsData(v === 'hub' ? [] : arcs);
+            updateGlowData();
 
             if (hasData) {
-                world.labelsData(v === 'arc' ? [] : renderHubs);
+                world.labelsData(v === 'arc' ? [] : hubs);
             } else {
                 cLabelState = -1;
                 upd();
@@ -750,7 +1028,10 @@
             if (flights.length > 0 && !confirm(i18n[lang].confirmClear)) return;
             stopReplay();
             selectedId = null;
+            clearAirportFilter(false);
             flights = []; rawArcs = []; rawHubs = []; renderArcs = [];
+            arrivalCounts = new Map();
+            glowData = [];
             allCities.forEach(c => c.v = 0);
             enrichHubs(allCities);
             renderHubs = allCities;
@@ -762,6 +1043,7 @@
             renderLayers();
             updateStats();
             renderFlightList();
+            buildAirportSelect();
             overviewPOV();
             msg(i18n[lang].cleared);
         }
@@ -795,8 +1077,8 @@
             if (!box) return;
             if (flights.length === 0) { box.innerHTML = `<div class="empty-hint">${i18n[lang].empty}</div>`; return; }
             const arr = flights.slice();
-            if (sortMode === 'time') arr.sort((a, b) => (b.ts - a.ts) || a.key.localeCompare(b.key)); // 最新在上
-            else arr.sort((a, b) => (b.dist - a.dist) || a.key.localeCompare(b.key));                // 里程降序
+            if (sortMode === 'time') arr.sort((a, b) => (b.ts - a.ts) || a.key.localeCompare(b.key));
+            else arr.sort((a, b) => (b.dist - a.dist) || a.key.localeCompare(b.key));
             box.innerHTML = arr.map(flightCardHTML).join('');
             box.querySelectorAll('.flight-card').forEach(el => el.addEventListener('click', () => selectFlight(el.dataset.fid)));
             markSelectedCard();
@@ -822,6 +1104,8 @@
         // 选中航班 -> 高亮 + 聚焦 + 详情
         // ==========================================
         function selectFlight(fid, opts = {}) {
+            // 单条航线查看时先退出机场筛选，避免冲突
+            clearAirportFilter(false);
             selectedId = fid;
             markSelectedCard();
             refreshArcStyle();
@@ -840,7 +1124,7 @@
             const o = db[f.origin], d = db[f.dest]; if (!o || !d) return;
             const lat = (o.lt + d.lt) / 2;
             let lng;
-            if (Math.abs(o.lg - d.lg) > 180) { // 跨日期变更线
+            if (Math.abs(o.lg - d.lg) > 180) {
                 let a = o.lg, b = d.lg; if (a < 0) a += 360; if (b < 0) b += 360;
                 lng = (a + b) / 2; if (lng > 180) lng -= 360;
             } else { lng = (o.lg + d.lg) / 2; }
@@ -851,6 +1135,7 @@
         function clearFocus() {
             stopReplay();
             selectedId = null;
+            clearAirportFilter(false);
             markSelectedCard();
             refreshArcStyle();
             hideDetail();
@@ -859,14 +1144,15 @@
 
         // 将全部航班纳入视野
         function overviewPOV() {
-            if (flights.length === 0) { flyTo({ lat: 20, lng: 0, altitude: 2.5 }, 900); return; }
+            const arcs = getFilteredArcs();
+            if (flights.length === 0 || arcs.length === 0) { flyTo({ lat: 20, lng: 0, altitude: 2.5 }, 900); return; }
             let slat = 0, slng = 0, n = 0, minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
-            flights.forEach(f => {
-                const o = db[f.origin], d = db[f.dest]; if (!o || !d) return;
-                [o, d].forEach(p => {
-                    slat += p.lt; slng += p.lg; n++;
-                    minLat = Math.min(minLat, p.lt); maxLat = Math.max(maxLat, p.lt);
-                    minLng = Math.min(minLng, p.lg); maxLng = Math.max(maxLng, p.lg);
+            arcs.forEach(a => {
+                const pts = [[a.startLat, a.startLng], [a.endLat, a.endLng]];
+                pts.forEach(([lt, lg]) => {
+                    slat += lt; slng += lg; n++;
+                    minLat = Math.min(minLat, lt); maxLat = Math.max(maxLat, lt);
+                    minLng = Math.min(minLng, lg); maxLng = Math.max(maxLng, lg);
                 });
             });
             if (n === 0) { flyTo({ lat: 20, lng: 0, altitude: 2.5 }, 900); return; }
@@ -886,13 +1172,17 @@
         }
 
         const REPLAY_MS_PER_FLIGHT = 2600;
-        const REPLAY_FLY_MS = 500;
-        let replayRaf = null, replaySeq = [], replayIdx = -1, replayT0 = 0;
+        const REPLAY_FLY_MS = 700;
+        let replayRaf = null, replaySeq = [], replayIdx = -1, replayT0 = 0, replayEndTimer = null;
 
         function startReplay() {
             if (flights.length === 0) { msg(i18n[lang].noReplay); return; }
             stopReplay();
-            selectedId = null; markSelectedCard(); refreshArcStyle(); hideDetail();
+            // 回放时退出机场筛选与单条高亮，避免冲突
+            clearAirportFilter(false);
+            selectedId = null;
+            hideDetail();
+            refreshArcStyle();
             replaySeq = flights.slice().sort((a, b) => (a.ts - b.ts) || a.key.localeCompare(b.key));
             replayIdx = -1;
             replayT0 = performance.now();
@@ -902,18 +1192,29 @@
 
         function replayLoop(now) {
             if (!replaying) return;
-            if (replayIdx >= replaySeq.length - 1) { stopReplay(); clearFocus(); return; }
+            if (replayIdx >= replaySeq.length - 1) {
+                // 最后一条保持一会儿后退出回放并恢复全局视角
+                replayEndTimer = setTimeout(() => { stopReplay(); clearFocus(); }, Math.max(0, REPLAY_MS_PER_FLIGHT - (now - replayT0) % REPLAY_MS_PER_FLIGHT));
+                return;
+            }
             const dt = now - replayT0;
             const idx = Math.min(Math.floor(dt / REPLAY_MS_PER_FLIGHT), replaySeq.length - 1);
             if (idx !== replayIdx) {
                 replayIdx = idx;
-                selectFlight(replaySeq[replayIdx].key, { flyMs: REPLAY_FLY_MS });
+                const f = replaySeq[replayIdx];
+                selectedId = f.key;
+                refreshArcStyle();
+                focusArc(f, REPLAY_FLY_MS);
+                markSelectedCard();
+                const el = document.querySelector(`.flight-card[data-fid="${cssEscape(f.key)}"]`);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
             replayRaf = requestAnimationFrame(replayLoop);
         }
 
         function stopReplay() {
             if (replayRaf) { cancelAnimationFrame(replayRaf); replayRaf = null; }
+            if (replayEndTimer) { clearTimeout(replayEndTimer); replayEndTimer = null; }
             if (replaying) setReplaying(false);
         }
 
@@ -938,28 +1239,13 @@
         function hideDetail() { document.getElementById('detail-card').classList.add('hidden'); }
 
         // ==========================================
-        // 本地持久化（纯 localStorage，绝不上传）
+        // 本地持久化（纯 localStorage，绝不上传；但启动时不自动恢复）
         // ==========================================
         function persistFlights() {
             try {
                 const minimal = flights.map(f => ({ flight_id: f.flight_id, origin: f.origin, dest: f.dest, time: f.time }));
                 localStorage.setItem(LS_KEY, JSON.stringify(minimal));
             } catch (e) { console.warn('persist failed', e); }
-        }
-
-        function loadFlightsFromStorage() {
-            try {
-                const raw = localStorage.getItem(LS_KEY);
-                if (!raw) return [];
-                const arr = JSON.parse(raw);
-                if (!Array.isArray(arr)) return [];
-                const out = []; const seen = new Set();
-                arr.forEach(r => {
-                    const f = makeFlight((r.flight_id || '').toString(), (r.origin || '').toString().toUpperCase(), (r.dest || '').toString().toUpperCase(), (r.time || '').toString());
-                    if (f && !seen.has(f.key)) { seen.add(f.key); out.push(f); }
-                });
-                return out;
-            } catch (e) { console.warn('load failed', e); return []; }
         }
 
         // ==========================================
@@ -984,8 +1270,7 @@
             hideSuggestions(true);
             document.getElementById('src').value = '';
             const a = db[iata]; if (!a) return;
-            flyTo({ lat: a.lt, lng: a.lg, altitude: 1.0 }, 900);
-            msg(`${i18n[lang].focused} ${a.iata} · ${a.n}`, '#00ff88');
+            selectAirport(iata);
         }
         function hideSuggestions(immediate) { const box = document.getElementById('sugg-box'); if (immediate) { box.style.display = 'none'; return; } setTimeout(() => { box.style.display = 'none'; }, 180); }
         function goFirst() { const first = document.querySelector('#sugg-box .sugg-item[data-iata]'); if (first) selectSuggestion(first.dataset.iata); }
@@ -1009,8 +1294,8 @@
 
         function setRotation() {
             const val = parseFloat(document.getElementById('rSpeed').value);
-            world.controls().autoRotate = (val > 0);
-            if (val > 0) world.controls().autoRotateSpeed = val;
+            autoRotateSpeed = val;
+            if (world.controls()) world.controls().autoRotate = false;
             keepRendering(1500);
         }
 
@@ -1028,6 +1313,11 @@
             document.getElementById('l-theme').innerText = t.lTheme;
             document.getElementById('l-view').innerText = t.lView;
             document.getElementById('l-rotate').innerText = t.lRotate;
+            document.getElementById('l-airport').innerText = t.lAirport;
+            document.getElementById('opt-airport').innerText = t.selAirport;
+            document.getElementById('btn-dep').innerText = t.btnDep;
+            document.getElementById('btn-arr').innerText = t.btnArr;
+            document.getElementById('btn-reset-airport').innerText = t.resetFilter;
             document.getElementById('btnProj').innerText = is2DMode ? t.btnProj3d : t.btnProj2d;
             document.getElementById('btn-snap3d').innerText = t.snap3d;
             document.getElementById('btn-snap2d').innerText = t.snap2d;
@@ -1049,6 +1339,7 @@
             setSelOptions('vMode', { all: t.viewAll, arc: t.viewArc, hub: t.viewHub });
             setSelOptions('rSpeed', { '0': t.rotStop, '4.0': t.rotFast, '1.0': t.rotSlow });
             renderFlightList();
+            buildAirportSelect();
             if (isProvsOK && !is2DMode) world.polygonLabel(world.polygonLabel());
         }
 
