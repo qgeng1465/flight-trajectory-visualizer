@@ -196,22 +196,26 @@
     <div id="globeViz"></div>
 
     <!-- 先加载本地内置库；若本地缺失则静默回退 CDN（异步），主脚本会做可用性检查 -->
-    <script src="libs/three.min.js"></script>
+    <!-- globe.gl.min.js 已内置 Three.js，无需单独加载 three.min.js -->
     <script src="libs/globe.gl.min.js"></script>
+    <!-- 将 Globe.GL 内置的 Three.js 暴露到全局 THREE 变量 -->
+    <script>window.__THREE__ && (window.THREE = window.__THREE__)</script>
     <script src="libs/papaparse.min.js"></script>
     <script src="libs/topojson-client.min.js"></script>
     <script src="libs/Stats.min.js"></script>
     <script>
     (function(){
         const libs = [
-            {name:'THREE', file:'libs/three.min.js', cdn:'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'},
+            // THREE 由 globe.gl 内置提供，无需单独加载
             {name:'Globe', file:'libs/globe.gl.min.js', cdn:'https://unpkg.com/globe.gl@2.25.3/dist/globe.gl.min.js'},
             {name:'Papa', file:'libs/papaparse.min.js', cdn:'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js'},
             {name:'topojson', file:'libs/topojson-client.min.js', cdn:'https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js'},
             {name:'Stats', file:'libs/Stats.min.js', cdn:'https://cdnjs.cloudflare.com/ajax/libs/stats.js/16/Stats.min.js'}
         ];
+        // 检测本地库是否已加载；如缺失则从 CDN 回退加载
         libs.forEach(l => {
-            if (window[l.name]) return;
+            const found = l.name === 'Globe' ? (window.Globe || window.__THREE__) : window[l.name];
+            if (found) return;
             const s = document.createElement('script'); s.src = l.cdn; s.async = false;
             document.head.appendChild(s);
         });
@@ -229,6 +233,32 @@
         function animate() {
             requestAnimationFrame(animate);
             try {
+                // 延迟配置 OrbitControls（多层后备方案确保可用）
+                if (!controlsReady) {
+                    let ctrl = null;
+                    try { ctrl = world.controls(); } catch(e) {}
+                    if (!ctrl) try { ctrl = world._controls; } catch(e) {}
+                    if (!ctrl && window.__THREE__ && world.camera && world.renderer) {
+                        const cam = world.camera(), ren = world.renderer();
+                        if (cam && ren) {
+                            try { ctrl = new window.__THREE__.OrbitControls(cam, ren.domElement); } catch(e) {}
+                        }
+                    }
+                    if (ctrl) {
+                        ctrl.enableZoom = true;
+                        ctrl.enableRotate = true;
+                        ctrl.enablePan = false;
+                        ctrl.autoRotate = false;
+                        ctrl.autoRotateSpeed = 1.0;
+                        ctrl.minDistance = 30;
+                        ctrl.maxDistance = 1200;
+                        ctrl.enableDamping = true;
+                        ctrl.dampingFactor = 0.08;
+                        ctrl.rotateSpeed = 0.6;
+                        ctrl.zoomSpeed = 0.8;
+                        controlsReady = true;
+                    }
+                }
                 statsObj.update();
             } catch (e) { /* 吞掉异常，保证看门狗永不中断 */ }
         }
@@ -265,6 +295,7 @@
         const i18n = {
             zh: {
                 pageTitle: '✈ 我的飞行足迹', uiTitle: '控制台',
+                btnTitle: '展开/收起面板',
                 lSearch: '机场搜索', searchPh: '输入 纽约, new york, pvg...',
                 lFile: '导入航线数据 (.csv)', lTheme: '地图主题', lView: '图层控制', lRotate: '自转速度',
                 lAirport: '机场航线筛选', selAirport: '选择机场...',
@@ -291,6 +322,7 @@
             },
             en: {
                 pageTitle: '✈ My Flight Footprints', uiTitle: 'Console',
+                btnTitle: 'Toggle panel',
                 lSearch: 'Airport Search', searchPh: 'type new york, pvg...',
                 lFile: 'Import flight data (.csv)', lTheme: 'Map Theme', lView: 'Layers', lRotate: 'Rotation',
                 lAirport: 'Airport Route Filter', selAirport: 'Select airport...',
@@ -369,23 +401,8 @@
         world.atmosphereColor(T[curTheme].atmos);
         world.atmosphereAltitude(0.15);
 
-        // OrbitControls 配置：启用拖拽旋转和滚轮缩放
-        function configureControls() {
-            const ctrl = world.controls();
-            if (!ctrl) return;
-            ctrl.enableZoom = true;
-            ctrl.enableRotate = true;
-            ctrl.enablePan = false;
-            ctrl.autoRotate = false;
-            ctrl.autoRotateSpeed = 1.0;
-            ctrl.minDistance = 30;
-            ctrl.maxDistance = 1200;
-            ctrl.enableDamping = true;
-            ctrl.dampingFactor = 0.08;
-            ctrl.rotateSpeed = 0.6;
-            ctrl.zoomSpeed = 0.8;
-        }
-        configureControls();
+        // OrbitControls 延迟配置（等待 world.controls() 可用后执行一次）
+        let controlsReady = false;
 
         // 机场标签：默认显示 IATA；放大后由 upd() 切换为 IATA + 名称
         world.labelLat(d => d.lt);
@@ -456,8 +473,9 @@
             c.width = 64; c.height = 64;
             const ctx = c.getContext('2d');
             const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-            g.addColorStop(0, color);
-            g.addColorStop(0.35, color);
+            g.addColorStop(0, '#ffffff');
+            g.addColorStop(0.15, color);
+            g.addColorStop(0.55, color);
             g.addColorStop(1, 'rgba(0,0,0,0)');
             ctx.fillStyle = g;
             ctx.fillRect(0, 0, 128, 128);
@@ -501,7 +519,18 @@
         const TARGET_PR = Math.min(window.devicePixelRatio || 1, 1.25);
 
         function keepRendering(ms = 1500) { /* 占位，兼容调用 */ void ms; }
-        function flyTo(pov, ms) { world.pointOfView(pov, ms); }
+        let _flyTimer = null;
+        function flyTo(pov, ms) {
+            if (_flyTimer) { clearTimeout(_flyTimer); _flyTimer = null; }
+            if (ms) {
+                const ctrl = world.controls();
+                if (ctrl) { ctrl.enableDamping = false; }
+                world.pointOfView(pov, ms);
+                if (ctrl) { _flyTimer = setTimeout(() => { ctrl.enableDamping = true; _flyTimer = null; }, ms + 60); }
+            } else {
+                world.pointOfView(pov);
+            }
+        }
 
         world.renderer().setPixelRatio(TARGET_PR);
 
@@ -573,14 +602,15 @@
             if (v !== 'arc') {
                 hubs.forEach(hub => {
                     const cx = getX(hub.lg), cy = getY(hub.lt);
-                    // 光斑（按航线流量累加亮度）
+                    // 光斑（航旅纵横风格：高亮白色中心 + 流量越高光圈越大越亮）
                     const tc = airportTraffic.get(hub.iata) || 0;
                     if (tc > 0) {
-                        const r = 3 + tc * 2;
-                        const intensity = Math.min(0.4 + tc * 0.08, 0.9);
+                        const r = 4 + tc * 0.8;
+                        const intensity = Math.min(0.5 + tc * 0.1, 1.0);
                         const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-                        g.addColorStop(0, T[curTheme].glow);
-                        g.addColorStop(0.5, T[curTheme].glow);
+                        g.addColorStop(0, '#ffffff');
+                        g.addColorStop(0.15, T[curTheme].glow);
+                        g.addColorStop(0.55, T[curTheme].glow);
                         g.addColorStop(1, 'rgba(0,0,0,0)');
                         ctx.fillStyle = g;
                         ctx.globalAlpha = intensity;
@@ -612,11 +642,13 @@
                 if (ctrl) ctrl.enabled = false;
                 ensure2DImage(curTheme);
                 draw2DCanvas();
+                g.style.zIndex = '1'; c.style.zIndex = '2';
                 c.style.opacity = 1; c.style.pointerEvents = 'auto';
                 g.style.opacity = 0; g.style.pointerEvents = 'none';
                 btn.innerText = i18n[lang].btnProj3d;
             } else {
                 if (ctrl) ctrl.enabled = true;
+                c.style.zIndex = '1'; g.style.zIndex = '2';
                 c.style.opacity = 0; c.style.pointerEvents = 'none';
                 g.style.opacity = 1; g.style.pointerEvents = 'auto';
                 btn.innerText = i18n[lang].btnProj2d;
@@ -922,13 +954,12 @@
             hubs.forEach(h => {
                 const tc = airportTraffic.get(h.iata) || 0;
                 if (tc > 0) {
-                    const intensity = Math.min(0.5 + tc * 0.08, 1.0);
                     glowData.push({
                         lat: h.lt, lng: h.lg, altitude: 0.03,
                         iata: h.iata, name: h.n, traffic: tc,
                         color: T[curTheme].glow,
-                        scale: 1.8 + tc * 0.6,
-                        opacity: intensity
+                        scale: 1.6 + tc * 0.4,
+                        opacity: 0.95
                     });
                 }
             });
@@ -1272,6 +1303,7 @@
             document.getElementById('btn-replay').innerText = t.replay;
             document.getElementById('btn-stop').innerText = t.stop;
             document.getElementById('btn-cancel-focus').innerText = t.cancelFocus;
+            document.getElementById('btn-show-ui').title = t.btnTitle;
             document.getElementById('privacy-note').innerText = t.privacy;
             setSelOptions('gTheme', { color: t.themeColor, dark: t.themeDark });
             setSelOptions('vMode', { all: t.viewAll, arc: t.viewArc, hub: t.viewHub });
