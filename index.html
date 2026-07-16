@@ -255,7 +255,7 @@
         let cLabelState = -1, cPolyState = -1;
         let hasData = false;
         let rawArcs = [], rawHubs = [], renderArcs = [], renderHubs = [];
-        let arrivalCounts = new Map();   // 每个机场的抵达次数（用于光斑强度）
+        let airportTraffic = new Map();   // 每个机场的航线流量（用于光斑亮度累加）
         let glowData = [];               // 3D 光斑 custom layer 数据
         let glowTextureCache = {};       // 按颜色缓存光斑贴图
 
@@ -441,6 +441,7 @@
                 isDragging = false;
                 try { globeContainer.releasePointerCapture(e.pointerId); } catch (_) {}
                 globeContainer.style.cursor = 'grab';
+                updThrottled();
             }
             function onWheel(e) {
                 if (is2DMode) return;
@@ -449,6 +450,7 @@
                 const factor = 1 + e.deltaY * ZOOM_SENSITIVITY;
                 const altitude = Math.max(MIN_ALTITUDE, Math.min(MAX_ALTITUDE, pov.altitude * factor));
                 world.pointOfView({ lat: pov.lat, lng: pov.lng, altitude });
+                updThrottled();
                 keepRendering(500);
             }
             globeContainer.addEventListener('pointerdown', onPointerDown);
@@ -552,12 +554,15 @@
 
         if (typeof THREE !== 'undefined') {
             world.customThreeObject(d => {
-                const sprite = new THREE.Sprite(createGlowMaterial(d.color));
+                const mat = createGlowMaterial(d.color);
+                mat.opacity = d.opacity || 0.85;
+                const sprite = new THREE.Sprite(mat);
                 sprite.scale.set(d.scale, d.scale, 1);
                 return sprite;
             });
             world.customThreeObjectUpdate((obj, d) => {
                 obj.scale.set(d.scale, d.scale, 1);
+                obj.material.opacity = d.opacity || 0.85;
                 const desired = d.color;
                 if (obj.material.userData.lastColor !== desired) {
                     obj.material.map = getGlowTexture(desired);
@@ -654,25 +659,26 @@
             if (v !== 'arc') {
                 hubs.forEach(hub => {
                     const cx = getX(hub.lg), cy = getY(hub.lt);
-                    // 光斑（按抵达次数）
-                    const ac = arrivalCounts.get(hub.iata) || 0;
-                    if (ac > 0) {
-                        const r = 4 + ac * 2.5;
+                    // 光斑（按航线流量累加亮度）
+                    const tc = airportTraffic.get(hub.iata) || 0;
+                    if (tc > 0) {
+                        const r = 3 + tc * 2;
+                        const intensity = Math.min(0.4 + tc * 0.08, 0.9);
                         const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
                         g.addColorStop(0, T[curTheme].glow);
                         g.addColorStop(0.5, T[curTheme].glow);
                         g.addColorStop(1, 'rgba(0,0,0,0)');
                         ctx.fillStyle = g;
-                        ctx.globalAlpha = 0.7;
+                        ctx.globalAlpha = intensity;
                         ctx.beginPath();
                         ctx.arc(cx, cy, r, 0, 2 * Math.PI);
                         ctx.fill();
                     }
                     // 小中心点
-                    ctx.globalAlpha = 1.0;
+                    ctx.globalAlpha = 0.8;
                     ctx.beginPath();
                     ctx.fillStyle = hub.iata === filterAirport ? '#00ccff' : '#fff';
-                    ctx.arc(cx, cy, 2.2, 0, 2 * Math.PI);
+                    ctx.arc(cx, cy, 2.0, 0, 2 * Math.PI);
                     ctx.fill();
 
                     // 机场名称
@@ -881,7 +887,7 @@
         function rebuildFromFlights() {
             const arcs = [];
             const hubs = new Map();
-            arrivalCounts = new Map();
+            airportTraffic = new Map();
             flights.forEach(f => {
                 const o = db[f.origin], d = db[f.dest];
                 if (!o || !d) return;
@@ -889,7 +895,8 @@
                 if (!hubs.has(o.iata)) hubs.set(o.iata, { iata: o.iata, v: 0 });
                 if (!hubs.has(d.iata)) hubs.set(d.iata, { iata: d.iata, v: 0 });
                 hubs.get(o.iata).v++; hubs.get(d.iata).v++;
-                arrivalCounts.set(f.dest, (arrivalCounts.get(f.dest) || 0) + 1);
+                airportTraffic.set(f.origin, (airportTraffic.get(f.origin) || 0) + 1);
+                airportTraffic.set(f.dest, (airportTraffic.get(f.dest) || 0) + 1);
             });
             rawArcs = arcs;
             rawHubs = Array.from(hubs.values());
@@ -994,13 +1001,15 @@
             glowData = [];
             if (typeof THREE === 'undefined') return;
             hubs.forEach(h => {
-                const ac = arrivalCounts.get(h.iata) || 0;
-                if (ac > 0) {
+                const tc = airportTraffic.get(h.iata) || 0;
+                if (tc > 0) {
+                    const intensity = Math.min(0.5 + tc * 0.08, 1.0);
                     glowData.push({
                         lat: h.lt, lng: h.lg, altitude: 0.03,
-                        iata: h.iata, name: h.n, arrCount: ac,
+                        iata: h.iata, name: h.n, traffic: tc,
                         color: T[curTheme].glow,
-                        scale: 2.0 + ac * 0.9
+                        scale: 1.8 + tc * 0.6,
+                        opacity: intensity
                     });
                 }
             });
@@ -1030,7 +1039,7 @@
             selectedId = null;
             clearAirportFilter(false);
             flights = []; rawArcs = []; rawHubs = []; renderArcs = [];
-            arrivalCounts = new Map();
+            airportTraffic = new Map();
             glowData = [];
             allCities.forEach(c => c.v = 0);
             enrichHubs(allCities);
@@ -1205,6 +1214,7 @@
                 selectedId = f.key;
                 refreshArcStyle();
                 focusArc(f, REPLAY_FLY_MS);
+                setTimeout(() => updThrottled(), REPLAY_FLY_MS + 50);
                 markSelectedCard();
                 const el = document.querySelector(`.flight-card[data-fid="${cssEscape(f.key)}"]`);
                 if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
