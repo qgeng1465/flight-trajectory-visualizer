@@ -112,7 +112,7 @@
             <div class="stat-card"><div class="stat-num" id="st-airports">0</div><div class="stat-label" id="lbl-air">到达机场</div></div>
         </div>
 
-        <div class="group"><label id="l-file2">导入飞行 CSV</label><input type="file" id="fIn2" accept=".csv"></div>
+        <div class="group"><label id="l-file2" for="fIn2">导入飞行 CSV</label><input type="file" id="fIn2" accept=".csv"></div>
 
         <div class="flex">
             <button id="sort-time" class="sort-btn active" onclick="setSort('time')">按时间</button>
@@ -130,7 +130,7 @@
         <div id="flight-list"></div>
 
         <div class="group">
-            <label id="l-airport">机场航线筛选</label>
+            <label id="l-airport" for="airport-select">机场航线筛选</label>
             <select id="airport-select"><option value="" id="opt-airport">选择机场...</option></select>
             <div class="flex" style="margin-top:6px;">
                 <button id="btn-dep" class="filter-btn" onclick="setAirportFilter('dep')">起飞航班</button>
@@ -140,13 +140,13 @@
         </div>
 
         <div class="group">
-            <label id="l-search">机场搜索</label>
+            <label id="l-search" for="src">机场搜索</label>
             <input type="text" id="src" placeholder="输入 纽约, new york, pvg..." autocomplete="off" oninput="debounceSearch()" onblur="hideSuggestions()" onkeydown="if(event.keyCode==13)goFirst()">
             <div id="sugg-box"></div>
         </div>
 
         <div class="group">
-            <label id="l-theme">地图主题</label>
+            <label id="l-theme" for="gTheme">地图主题</label>
             <select id="gTheme" onchange="changeTheme()">
                 <option value="color" selected>卫星遥感 (Color)</option>
                 <option value="dark">暗色流向 (Dark)</option>
@@ -155,7 +155,7 @@
         </div>
 
         <div class="group">
-            <label id="l-view">图层控制</label>
+            <label id="l-view" for="vMode">图层控制</label>
             <select id="vMode" onchange="renderLayers()">
                 <option value="all">显示全部</option>
                 <option value="arc">仅显示航线</option>
@@ -164,7 +164,7 @@
         </div>
 
         <div class="group">
-            <label id="l-rotate">自转速度</label>
+            <label id="l-rotate" for="rSpeed">自转速度</label>
             <select id="rSpeed" onchange="setRotation()">
                 <option value="0" selected>静止 - 默认</option>
                 <option value="4.0">快速</option>
@@ -186,7 +186,7 @@
 
     <!-- 航班详情卡 -->
     <div id="detail-card" class="hidden">
-        <button class="detail-close" onclick="hideDetail()">✕</button>
+        <button class="detail-close" id="detail-close-btn">✕</button>
         <div class="dc-id" id="dc-id"></div>
         <div class="dc-route" id="dc-route"></div>
         <div class="dc-grid" id="dc-grid"></div>
@@ -229,43 +229,19 @@
         statsObj.dom.style.zIndex = '100';
         document.body.appendChild(statsObj.dom);
 
-        // 轻量 rAF 循环：持续运行，确保交互/动画不卡顿
+        // 轻量 rAF 循环：仅更新 FPS 面板（Globe.GL 内部处理 controls.update）
         function animate() {
             requestAnimationFrame(animate);
-            try {
-                // 延迟配置 OrbitControls（多层后备方案确保可用）
-                if (!controlsReady) {
-                    let ctrl = null;
-                    try { ctrl = world.controls(); } catch(e) {}
-                    if (!ctrl) try { ctrl = world._controls; } catch(e) {}
-                    if (!ctrl && window.__THREE__ && world.camera && world.renderer) {
-                        const cam = world.camera(), ren = world.renderer();
-                        if (cam && ren) {
-                            try { ctrl = new window.__THREE__.OrbitControls(cam, ren.domElement); } catch(e) {}
-                        }
-                    }
-                    if (ctrl) {
-                        ctrl.enableZoom = true;
-                        ctrl.enableRotate = true;
-                        ctrl.enablePan = false;
-                        ctrl.autoRotate = false;
-                        ctrl.autoRotateSpeed = 1.0;
-                        ctrl.minDistance = 30;
-                        ctrl.maxDistance = 1200;
-                        ctrl.enableDamping = true;
-                        ctrl.dampingFactor = 0.08;
-                        ctrl.rotateSpeed = 0.6;
-                        ctrl.zoomSpeed = 0.8;
-                        controlsReady = true;
-                    }
-                }
-                statsObj.update();
-            } catch (e) { /* 吞掉异常，保证看门狗永不中断 */ }
+            try { statsObj.update(); } catch (e) { /* ignore */ }
         }
         requestAnimationFrame(animate);
 
         // ===== 全局状态 =====
         let db = {}, provs = [], lang = 'zh', curTheme = 'color', is2DMode = false;
+
+        // 2D Canvas 视图状态（缩放/平移）
+        let _2dView = { scale: 1, ox: 0, oy: 0 };
+        let _2dDragging = false, _2dDragLast = null;
         let largeCities = [], allCities = [], idleCities = [], isAirportsOK = false, isProvsOK = false, provsLoading = false;
         let cLabelState = -1, cPolyState = -1;
         let hasData = false;
@@ -401,8 +377,27 @@
         world.atmosphereColor(T[curTheme].atmos);
         world.atmosphereAltitude(0.15);
 
-        // OrbitControls 延迟配置（等待 world.controls() 可用后执行一次）
-        let controlsReady = false;
+        // ===== 同步初始化 OrbitControls =====
+        let orbitCtrl = null;
+        try { orbitCtrl = world.controls(); } catch(e) { orbitCtrl = null; }
+        if (!orbitCtrl) { try { orbitCtrl = world._controls; } catch(e) {} }
+        if (!orbitCtrl && window.__THREE__ && world.camera && world.renderer) {
+            try { orbitCtrl = new window.__THREE__.OrbitControls(world.camera(), world.renderer().domElement); } catch(e) {} }
+        if (orbitCtrl) {
+            orbitCtrl.enableZoom = true;
+            orbitCtrl.enableRotate = true;
+            orbitCtrl.enablePan = false;
+            orbitCtrl.autoRotate = false;
+            orbitCtrl.autoRotateSpeed = 1.0;
+            orbitCtrl.minDistance = 30;
+            orbitCtrl.maxDistance = 1200;
+            orbitCtrl.enableDamping = true;
+            orbitCtrl.dampingFactor = 0.08;
+            orbitCtrl.rotateSpeed = 0.6;
+            orbitCtrl.zoomSpeed = 0.8;
+        }
+        // 暴露到 window 以便调试
+        window.orbitCtrl = orbitCtrl;
 
         // 机场标签：默认显示 IATA；放大后由 upd() 切换为 IATA + 名称
         world.labelLat(d => d.lt);
@@ -479,7 +474,7 @@
             g.addColorStop(1, 'rgba(0,0,0,0)');
             ctx.fillStyle = g;
             ctx.fillRect(0, 0, 128, 128);
-            const tex = new THREE.CanvasTexture(c);
+            const tex = new THREE.Texture(c);
             tex.needsUpdate = true;
             glowTextureCache[color] = tex;
             return tex;
@@ -523,10 +518,9 @@
         function flyTo(pov, ms) {
             if (_flyTimer) { clearTimeout(_flyTimer); _flyTimer = null; }
             if (ms) {
-                const ctrl = world.controls();
-                if (ctrl) { ctrl.enableDamping = false; }
+                if (orbitCtrl) { orbitCtrl.enableDamping = false; }
                 world.pointOfView(pov, ms);
-                if (ctrl) { _flyTimer = setTimeout(() => { ctrl.enableDamping = true; _flyTimer = null; }, ms + 60); }
+                if (orbitCtrl) { _flyTimer = setTimeout(() => { orbitCtrl.enableDamping = true; _flyTimer = null; }, ms + 60); }
             } else {
                 world.pointOfView(pov);
             }
@@ -555,7 +549,7 @@
         });
 
         // ==========================================
-        // 2D Canvas 高清物理贴图渲染引擎
+        // 2D Canvas 高清物理贴图渲染引擎（支持缩放/平移）
         // ==========================================
         function draw2DCanvas() {
             const canvas = document.getElementById('canvas2d');
@@ -564,7 +558,8 @@
             canvas.width = Math.floor(W * dpr);
             canvas.height = Math.floor(H * dpr);
             const ctx = canvas.getContext('2d');
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            // 应用 2D 视图变换（缩放 + 平移）
+            ctx.setTransform(dpr * _2dView.scale, 0, 0, dpr * _2dView.scale, _2dView.ox * dpr, _2dView.oy * dpr);
 
             ctx.fillStyle = T[curTheme].mapBg;
             ctx.fillRect(0, 0, W, H);
@@ -637,9 +632,8 @@
         function toggleProjection() {
             is2DMode = !is2DMode;
             const c = document.getElementById('canvas2d'), g = document.getElementById('globeViz'), btn = document.getElementById('btnProj');
-            const ctrl = world.controls();
             if (is2DMode) {
-                if (ctrl) ctrl.enabled = false;
+                if (orbitCtrl) orbitCtrl.enabled = false;
                 ensure2DImage(curTheme);
                 draw2DCanvas();
                 g.style.zIndex = '1'; c.style.zIndex = '2';
@@ -647,7 +641,7 @@
                 g.style.opacity = 0; g.style.pointerEvents = 'none';
                 btn.innerText = i18n[lang].btnProj3d;
             } else {
-                if (ctrl) ctrl.enabled = true;
+                if (orbitCtrl) orbitCtrl.enabled = true;
                 c.style.zIndex = '1'; g.style.zIndex = '2';
                 c.style.opacity = 0; c.style.pointerEvents = 'none';
                 g.style.opacity = 1; g.style.pointerEvents = 'auto';
@@ -655,6 +649,62 @@
             }
             keepRendering(1500);
         }
+
+        // ========== 2D Canvas 交互（缩放 / 平移） ==========
+        const _canvas2d = document.getElementById('canvas2d');
+
+        // 缩放：鼠标滚轮
+        _canvas2d.addEventListener('wheel', e => {
+            if (!is2DMode) return;
+            e.preventDefault();
+            const rect = _canvas2d.getBoundingClientRect();
+            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            const delta = -e.deltaY * 0.001;
+            const oldScale = _2dView.scale;
+            let newScale = Math.max(0.3, Math.min(20, oldScale * (1 + delta)));
+            if (e.ctrlKey || e.metaKey) newScale = Math.max(0.3, Math.min(20, oldScale * (1 + delta * 3)));
+            // 以鼠标位置为中心缩放
+            const ratio = newScale / oldScale;
+            _2dView.ox = mx - ratio * (mx - _2dView.ox);
+            _2dView.oy = my - ratio * (my - _2dView.oy);
+            _2dView.scale = newScale;
+            draw2DCanvas();
+        }, { passive: false });
+
+        // 平移：鼠标拖拽
+        _canvas2d.addEventListener('pointerdown', e => {
+            if (!is2DMode) return;
+            if (e.button !== 0) return; // 仅左键
+            _2dDragging = true;
+            _2dDragLast = [e.clientX, e.clientY];
+            _canvas2d.setPointerCapture(e.pointerId);
+        });
+        _canvas2d.addEventListener('pointermove', e => {
+            if (!_2dDragging || !_2dDragLast) return;
+            const dx = e.clientX - _2dDragLast[0], dy = e.clientY - _2dDragLast[1];
+            _2dDragLast = [e.clientX, e.clientY];
+            _2dView.ox += dx;
+            _2dView.oy += dy;
+            draw2DCanvas();
+        });
+        _canvas2d.addEventListener('pointerup', e => {
+            if (!_2dDragging) return;
+            _2dDragging = false;
+            _2dDragLast = null;
+        });
+        _canvas2d.addEventListener('pointercancel', e => {
+            _2dDragging = false;
+            _2dDragLast = null;
+        });
+
+        // 双击复位
+        _canvas2d.addEventListener('dblclick', e => {
+            if (!is2DMode) return;
+            _2dView.scale = 1;
+            _2dView.ox = 0;
+            _2dView.oy = 0;
+            draw2DCanvas();
+        });
 
         // ==========================================
         // 核心逻辑与数据处理
@@ -834,6 +884,8 @@
 
         // 由 flights 重建弧线 / 枢纽并刷新全部 UI
         function rebuildFromFlights() {
+            // 重置 2D 视图
+            _2dView.scale = 1; _2dView.ox = 0; _2dView.oy = 0;
             const arcs = [];
             const hubs = new Map();
             airportTraffic = new Map();
@@ -1201,7 +1253,18 @@
 
         function hideDetail() { document.getElementById('detail-card').classList.add('hidden'); }
 
-        // ==========================================
+                // 详情卡关闭：addEventListener 确保可靠
+        (function() {
+            var btn = document.getElementById("detail-close-btn");
+            if (!btn) return;
+            btn.addEventListener("click", function(e) {
+                e.stopPropagation();
+                hideDetail();
+                setTimeout(function() { try { clearFocus(); } catch(ex) {} }, 10);
+            });
+        })();
+    
+// ==========================================
         // 本地持久化（纯 localStorage，绝不上传；但启动时不自动恢复）
         // ==========================================
         function persistFlights() {
@@ -1256,11 +1319,10 @@
         }
 
         function syncAutoRotate() {
-            const ctrl = world.controls();
-            if (!ctrl) return;
+            if (!orbitCtrl) return;
             const shouldRotate = autoRotateSpeed > 0 && !replaying && !selectedId && !filterAirport;
-            ctrl.autoRotate = shouldRotate;
-            ctrl.autoRotateSpeed = autoRotateSpeed;
+            orbitCtrl.autoRotate = shouldRotate;
+            orbitCtrl.autoRotateSpeed = autoRotateSpeed;
         }
 
         function setRotation() {
