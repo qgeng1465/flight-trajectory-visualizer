@@ -230,21 +230,6 @@
             requestAnimationFrame(animate);
             try {
                 statsObj.update();
-                // 自转由我们自己驱动，避免依赖 OrbitControls
-                if (autoRotateSpeed > 0 && !isDragging && !replaying && !selectedId && !filterAirport) {
-                    const pov = world.pointOfView();
-                    world.pointOfView({ lat: pov.lat, lng: pov.lng + autoRotateSpeed * 0.025, altitude: pov.altitude });
-                }
-                // 自适应渲染像素比
-                const now = performance.now();
-                _fpsFrames++;
-                if (now - _fpsLast >= 500) {
-                    const fps = _fpsFrames * 1000 / (now - _fpsLast);
-                    _fpsFrames = 0; _fpsLast = now;
-                    if (fps < 40) { _prLo++; _prHi = 0; if (_prLo >= 2 && currentPR > 0.75) { currentPR = Math.max(0.75, +(currentPR - 0.25).toFixed(2)); applyPR(); _prLo = 0; } }
-                    else if (fps > 57) { _prHi++; _prLo = 0; if (_prHi >= 2 && currentPR < TARGET_PR) { currentPR = Math.min(TARGET_PR, +(currentPR + 0.25).toFixed(2)); applyPR(); _prHi = 0; } }
-                    else { _prLo = 0; _prHi = 0; }
-                }
             } catch (e) { /* 吞掉异常，保证看门狗永不中断 */ }
         }
         requestAnimationFrame(animate);
@@ -263,8 +248,7 @@
         let filterAirport = null;        // 当前选中的机场 IATA
         let filterMode = null;           // 'dep' | 'arr'
 
-        // ===== 自定义地球鼠标交互状态 =====
-        let isDragging = false, dragStartX = 0, dragStartY = 0, dragHasMoved = false;
+        // ===== 自转速度状态 =====
         let autoRotateSpeed = 0;
 
         // ===== 飞行记录簿状态 =====
@@ -385,81 +369,23 @@
         world.atmosphereColor(T[curTheme].atmos);
         world.atmosphereAltitude(0.15);
 
-        // 自定义鼠标/触摸交互：滚轮缩放 + 拖拽旋转
-        // 由于 globe.gl 内置 OrbitControls 在某些环境下对滚轮/拖拽不敏感，
-        // 这里直接用 pointer/wheel 事件驱动 pointOfView，保证最基础的自由操作一定可用。
+        // OrbitControls 配置：启用拖拽旋转和滚轮缩放
         function configureControls() {
             const ctrl = world.controls();
             if (!ctrl) return;
-            // 关闭内置 manual 交互，避免与自定义控制冲突
-            ctrl.enableZoom = false;
-            ctrl.enableRotate = false;
+            ctrl.enableZoom = true;
+            ctrl.enableRotate = true;
             ctrl.enablePan = false;
             ctrl.autoRotate = false;
-            ctrl.minDistance = 120;
-            ctrl.maxDistance = 12000;
+            ctrl.autoRotateSpeed = 1.0;
+            ctrl.minDistance = 30;
+            ctrl.maxDistance = 1200;
+            ctrl.enableDamping = true;
+            ctrl.dampingFactor = 0.08;
+            ctrl.rotateSpeed = 0.6;
+            ctrl.zoomSpeed = 0.8;
         }
         configureControls();
-
-        const globeContainer = document.getElementById('globeViz');
-        const ROTATE_SENSITIVITY = 0.18;
-        const ZOOM_SENSITIVITY = 0.0012;
-        const MIN_ALTITUDE = 0.25;
-        const MAX_ALTITUDE = 12;
-        const DRAG_THRESHOLD = 5;
-
-        function setupCustomInteraction() {
-            if (!globeContainer) return;
-            globeContainer.style.cursor = 'grab';
-
-            function onPointerDown(e) {
-                if (is2DMode) return;
-                if (e.pointerType === 'mouse' && e.button !== 0) return;
-                dragHasMoved = false;
-                dragStartX = e.clientX; dragStartY = e.clientY;
-                isDragging = true;
-                try { globeContainer.setPointerCapture(e.pointerId); } catch (_) {}
-                globeContainer.style.cursor = 'grabbing';
-                keepRendering(2000);
-            }
-            function onPointerMove(e) {
-                if (!isDragging || is2DMode) return;
-                const dx = e.clientX - dragStartX;
-                const dy = e.clientY - dragStartY;
-                if (!dragHasMoved) {
-                    if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
-                    dragHasMoved = true;
-                }
-                const pov = world.pointOfView();
-                const lat = Math.max(-90, Math.min(90, pov.lat - dy * ROTATE_SENSITIVITY));
-                const lng = pov.lng - dx * ROTATE_SENSITIVITY;
-                world.pointOfView({ lat, lng, altitude: pov.altitude });
-                dragStartX = e.clientX; dragStartY = e.clientY;
-                keepRendering(200);
-            }
-            function onPointerUp(e) {
-                isDragging = false;
-                try { globeContainer.releasePointerCapture(e.pointerId); } catch (_) {}
-                globeContainer.style.cursor = 'grab';
-                updThrottled();
-            }
-            function onWheel(e) {
-                if (is2DMode) return;
-                e.preventDefault();
-                const pov = world.pointOfView();
-                const factor = 1 + e.deltaY * ZOOM_SENSITIVITY;
-                const altitude = Math.max(MIN_ALTITUDE, Math.min(MAX_ALTITUDE, pov.altitude * factor));
-                world.pointOfView({ lat: pov.lat, lng: pov.lng, altitude });
-                updThrottled();
-                keepRendering(500);
-            }
-            globeContainer.addEventListener('pointerdown', onPointerDown);
-            globeContainer.addEventListener('pointermove', onPointerMove);
-            globeContainer.addEventListener('pointerup', onPointerUp);
-            globeContainer.addEventListener('pointercancel', onPointerUp);
-            globeContainer.addEventListener('wheel', onWheel, { passive: false });
-        }
-        setupCustomInteraction();
 
         // 机场标签：默认显示 IATA；放大后由 upd() 切换为 IATA + 名称
         world.labelLat(d => d.lt);
@@ -527,9 +453,9 @@
         function getGlowTexture(color) {
             if (glowTextureCache[color]) return glowTextureCache[color];
             const c = document.createElement('canvas');
-            c.width = 128; c.height = 128;
+            c.width = 64; c.height = 64;
             const ctx = c.getContext('2d');
-            const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+            const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
             g.addColorStop(0, color);
             g.addColorStop(0.35, color);
             g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -571,22 +497,10 @@
             });
         }
 
-        // ===== P1/P2 渲染调度：按需渲染 + 自适应像素比 =====
-        let renderUntil = 0, paused = false;
-        const TARGET_PR = Math.min(window.devicePixelRatio || 1, 2);
-        let currentPR = TARGET_PR;
-        let _fpsLast = performance.now(), _fpsFrames = 0, _prLo = 0, _prHi = 0;
+        // ===== P1/P2 渲染调度：按需渲染 =====
+        const TARGET_PR = Math.min(window.devicePixelRatio || 1, 1.25);
 
-        function keepRendering(ms = 1500) {
-            // 已不再暂停内部渲染循环，此函数保留供兼容性调用
-            renderUntil = Math.max(renderUntil, performance.now() + ms);
-        }
-        function applyPR() {
-            world.renderer().setPixelRatio(currentPR);
-            world.width(window.innerWidth);
-            world.height(window.innerHeight);
-        }
-        // 相机过渡包装
+        function keepRendering(ms = 1500) { /* 占位，兼容调用 */ void ms; }
         function flyTo(pov, ms) { world.pointOfView(pov, ms); }
 
         world.renderer().setPixelRatio(TARGET_PR);
@@ -693,13 +607,16 @@
         function toggleProjection() {
             is2DMode = !is2DMode;
             const c = document.getElementById('canvas2d'), g = document.getElementById('globeViz'), btn = document.getElementById('btnProj');
+            const ctrl = world.controls();
             if (is2DMode) {
+                if (ctrl) ctrl.enabled = false;
                 ensure2DImage(curTheme);
                 draw2DCanvas();
                 c.style.opacity = 1; c.style.pointerEvents = 'auto';
                 g.style.opacity = 0; g.style.pointerEvents = 'none';
                 btn.innerText = i18n[lang].btnProj3d;
             } else {
+                if (ctrl) ctrl.enabled = true;
                 c.style.opacity = 0; c.style.pointerEvents = 'none';
                 g.style.opacity = 1; g.style.pointerEvents = 'auto';
                 btn.innerText = i18n[lang].btnProj2d;
@@ -950,6 +867,7 @@
             filterAirport = iata;
             filterMode = mode;
             selectedId = null;
+            syncAutoRotate();
             hideDetail();
             refreshArcStyle();
             renderLayers();
@@ -965,6 +883,7 @@
         function clearAirportFilter(resetView = true) {
             filterAirport = null;
             filterMode = null;
+            syncAutoRotate();
             const sel = document.getElementById('airport-select');
             if (sel) sel.value = '';
             updateFilterUI();
@@ -1116,6 +1035,7 @@
             // 单条航线查看时先退出机场筛选，避免冲突
             clearAirportFilter(false);
             selectedId = fid;
+            syncAutoRotate();
             markSelectedCard();
             refreshArcStyle();
             const f = flights.find(x => x.key === fid);
@@ -1144,6 +1064,7 @@
         function clearFocus() {
             stopReplay();
             selectedId = null;
+            syncAutoRotate();
             clearAirportFilter(false);
             markSelectedCard();
             refreshArcStyle();
@@ -1178,6 +1099,7 @@
             replaying = on;
             document.getElementById('btn-replay').style.display = on ? 'none' : 'block';
             document.getElementById('btn-stop').style.display = on ? 'block' : 'none';
+            syncAutoRotate();
         }
 
         const REPLAY_MS_PER_FLIGHT = 2600;
@@ -1302,11 +1224,17 @@
             a.click();
         }
 
+        function syncAutoRotate() {
+            const ctrl = world.controls();
+            if (!ctrl) return;
+            const shouldRotate = autoRotateSpeed > 0 && !replaying && !selectedId && !filterAirport;
+            ctrl.autoRotate = shouldRotate;
+            ctrl.autoRotateSpeed = autoRotateSpeed;
+        }
+
         function setRotation() {
-            const val = parseFloat(document.getElementById('rSpeed').value);
-            autoRotateSpeed = val;
-            if (world.controls()) world.controls().autoRotate = false;
-            keepRendering(1500);
+            autoRotateSpeed = parseFloat(document.getElementById('rSpeed').value);
+            syncAutoRotate();
         }
 
         function setSelOptions(selId, map) {
@@ -1361,7 +1289,7 @@
         }
 
         // ===== 启动 =====
-        world.resumeAnimation(); // 确保内部渲染循环持续运行，不暂停
+        world.resumeAnimation(); // 保持渲染循环活跃，确保 OrbitControls 阻尼和自转动效流畅
         document.getElementById('fIn2').onchange = onFileChosen;
         let _updPending = false;
         function updThrottled() {
