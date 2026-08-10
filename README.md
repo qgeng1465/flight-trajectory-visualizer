@@ -124,3 +124,13 @@ Actively developed. Contributions and feedback are welcome!
 ## 🚧 开发状态
 
 持续开发中，欢迎交流与贡献！
+
+---
+
+## ☕ Support / 打赏
+
+If this project helped you, you can buy me a coffee.
+
+如果这个项目对你有帮助，可以请我喝杯咖啡。
+
+![Support](likes.jpg)
