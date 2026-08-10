@@ -64,6 +64,7 @@
         .flight-card.selected { background: rgba(255,204,0,0.12); border-color: #ffcc00; border-left-color: #ffcc00; box-shadow: 0 0 12px rgba(255,204,0,0.25); transform: translateX(3px); }
         .fc-row1 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
         .fc-id { font-family: monospace; font-weight: bold; color: #00ff88; font-size: 13px; }
+        .fc-airline { font-size: 10px; font-weight: normal; color: #66c2ff; }
         .flight-card.selected .fc-id { color: #ffcc00; }
         .fc-date { font-family: monospace; font-size: 11px; color: #999; }
         .fc-row2 { display: flex; align-items: center; gap: 10px; }
@@ -80,6 +81,7 @@
         #detail-card.hidden { display: none; }
         @keyframes dcIn { from { opacity: 0; transform: translate(-50%, 14px); } to { opacity: 1; transform: translate(-50%, 0); } }
         .dc-id { font-family: monospace; font-size: 15px; color: #ffcc00; margin-bottom: 8px; padding-right: 26px; }
+        .dc-airline { font-size: 11px; color: #66c2ff; font-family: system-ui; }
         .dc-route { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .dc-iata { font-family: monospace; font-size: 24px; font-weight: bold; color: #fff; }
         .dc-arrow { color: #ffcc00; font-size: 18px; }
@@ -110,6 +112,8 @@
             <div class="stat-card"><div class="stat-num" id="st-dist">0</div><div class="stat-label"><span id="lbl-dist">飞行里程</span> <span class="stat-unit" id="u-dist">km</span></div></div>
             <div class="stat-card"><div class="stat-num" id="st-dur">0</div><div class="stat-label"><span id="lbl-dur">飞行时长</span> <span class="stat-unit" id="u-dur">小时</span></div></div>
             <div class="stat-card"><div class="stat-num" id="st-airports">0</div><div class="stat-label" id="lbl-air">到达机场</div></div>
+            <div class="stat-card"><div class="stat-num" id="st-airlines">0</div><div class="stat-label" id="lbl-airlines">航空公司</div></div>
+            <div class="stat-card"><div class="stat-num" id="st-avg">0</div><div class="stat-label"><span id="lbl-avg">平均航距</span> <span class="stat-unit">km</span></div></div>
         </div>
 
         <div class="group"><label id="l-file2" for="fIn2">导入飞行 CSV</label><input type="file" id="fIn2" accept=".csv"></div>
@@ -283,7 +287,7 @@
                 themeColor: '卫星遥感 (Color)', themeDark: '暗色流向 (Dark)',
                 viewAll: '显示全部', viewArc: '仅显示航线', viewHub: '仅显示机场',
                 rotStop: '静止 - 默认', rotFast: '快速', rotSlow: '慢速', sLabel: '解析中...',
-                panelTitle: '✈ 我的飞行足迹', stCount: '飞行次数', stDist: '飞行里程', stDur: '飞行时长', stAir: '到达机场',
+                panelTitle: '✈ 我的飞行足迹', stCount: '飞行次数', stDist: '飞行里程', stDur: '飞行时长', stAir: '到达机场', stAirlines: '航空公司', stAvg: '平均航距',
                 uDist: 'km', uDur: '小时', importBtn: '导入飞行 CSV', sortTime: '按时间', sortDist: '按里程',
                 replay: '▶ 行程回放', stop: '⏹ 停止', cancelFocus: '✕ 取消聚焦',
                 empty: '导入你的飞行 CSV，开始记录你的飞行足迹 ✈',
@@ -310,7 +314,7 @@
                 themeColor: 'Satellite (Color)', themeDark: 'Dark Flow (Dark)',
                 viewAll: 'Show All', viewArc: 'Arcs Only', viewHub: 'Airports Only',
                 rotStop: 'Still - Default', rotFast: 'Fast', rotSlow: 'Slow', sLabel: 'Parsing...',
-                panelTitle: '✈ My Flight Footprints', stCount: 'Flights', stDist: 'Distance', stDur: 'Duration', stAir: 'Airports',
+                panelTitle: '✈ My Flight Footprints', stCount: 'Flights', stDist: 'Distance', stDur: 'Duration', stAir: 'Airports', stAirlines: 'Airlines', stAvg: 'Avg Distance',
                 uDist: 'km', uDur: 'hrs', importBtn: 'Import flight CSV', sortTime: 'By Time', sortDist: 'By Distance',
                 replay: '▶ Replay Trip', stop: '⏹ Stop', cancelFocus: '✕ Clear Focus',
                 empty: 'Import your flight CSV to start recording your footprints ✈',
@@ -324,6 +328,33 @@
                 focused: '📍 Airport located'
             }
         };
+
+        // ===== 航空公司识别（航班号前 2 位 IATA 前缀 -> 中文名称） =====
+        const AIRLINES = {
+            '9C': '春秋航空', 'PN': '西部航空', 'RY': '江西航空', 'MU': '东方航空', 'CA': '中国国际航空',
+            'ZH': '深圳航空', 'EU': '成都航空', 'CZ': '南方航空', 'GX': '北部湾航空', 'VJ': '越捷航空',
+            'JQ': '捷星航空', 'VA': '维珍澳洲', 'HU': '海南航空', 'D7': '亚洲航空X', 'MF': '厦门航空',
+            '3U': '四川航空', 'SC': '山东航空', 'HO': '吉祥航空', 'KN': '联合航空', 'GJ': '长龙航空',
+            '8L': '祥鹏航空', 'KY': '昆明航空', 'GS': '天津航空', 'G5': '华夏航空', 'BK': '奥凯航空',
+            'FM': '上海航空', 'NS': '河北航空', 'QW': '青岛航空', 'TV': '西藏航空', 'FU': '福州航空',
+            'DR': '瑞丽航空', 'AQ': '九元航空', '9H': '长安航空', 'UQ': '乌鲁木齐航空', 'JR': '幸福航空',
+            'SQ': '新加坡航空', 'MH': '马来西亚航空', 'CX': '国泰航空', 'KA': '国泰港龙', 'NH': '全日空',
+            'JL': '日本航空', 'KE': '大韩航空', 'OZ': '韩亚航空', 'TG': '泰国航空', 'PG': '曼谷航空',
+            'AA': '美国航空', 'UA': '美联航', 'DL': '达美航空', 'AF': '法国航空', 'LH': '汉莎航空',
+            'BA': '英国航空', 'KL': '荷兰皇家航空', 'AC': '加拿大航空', 'QF': '澳洲航空', 'NZ': '新西兰航空',
+            'CI': '中华航空', 'BR': '长荣航空', 'PR': '菲律宾航空', 'VN': '越南航空', 'LA': '拉美航空',
+            'IB': '伊比利亚航空', 'AZ': '意大利航空', 'LX': '瑞士航空', 'SK': '北欧航空', 'AY': '芬兰航空',
+            'TP': '葡萄牙航空', 'OS': '奥地利航空', 'SN': '布鲁塞尔航空', 'EY': '阿提哈德航空',
+            'QR': '卡塔尔航空', 'EK': '阿联酋航空', 'TK': '土耳其航空', 'SU': '俄罗斯航空',
+            'ET': '埃塞俄比亚航空', 'SA': '南非航空', 'GA': '印尼鹰航', 'AI': '印度航空',
+            'AK': '亚航', 'FD': '泰亚航', 'TR': '酷航', 'QZ': '印尼亚航',
+            'B6': '捷蓝航空', 'AS': '阿拉斯加航空', 'NK': '精神航空', 'F9': '边疆航空', 'WS': '西捷航空',
+            'FR': '瑞安航空', 'U2': '易捷航空', 'W6': '维兹航空', '4U': '欧洲之翼'
+        };
+        function airlineOf(fid) {
+            const p = String(fid || '').toUpperCase().slice(0, 2);
+            return (p && AIRLINES[p]) ? AIRLINES[p] : '';
+        }
 
         const T = {
             color: { img: './earth-color.jpg', arcN: '#00ffff', arcH: '#ff0055', glow: '#ffcc00', pFill: 'rgba(255,255,255,0.08)', pStrk: 'rgba(255,255,255,0.6)', bg: 'rgba(0,0,0,0.7)', text: '#fff', border: 'transparent', atmos: '#3a80df', mapBg: '#051329' },
@@ -493,6 +524,12 @@
 
         if (typeof THREE !== 'undefined') {
             world.customThreeObject(d => {
+                if (d._isPlane) {
+                    const mat = new THREE.SpriteMaterial({ map: makePlaneTexture(), transparent: true, depthWrite: false });
+                    const sprite = new THREE.Sprite(mat);
+                    sprite.scale.set(d.scale, d.scale, 1);
+                    return sprite;
+                }
                 const mat = createGlowMaterial(d.color);
                 mat.opacity = d.opacity || 0.85;
                 const sprite = new THREE.Sprite(mat);
@@ -500,6 +537,8 @@
                 return sprite;
             });
             world.customThreeObjectUpdate((obj, d) => {
+                setObjPos(obj, d.lat, d.lng, d.altitude || 0.03);
+                if (d._isPlane) return;
                 obj.scale.set(d.scale, d.scale, 1);
                 obj.material.opacity = d.opacity || 0.85;
                 const desired = d.color;
@@ -508,6 +547,101 @@
                     obj.material.userData.lastColor = desired;
                 }
             });
+        }
+
+        // ===== 大圆航线插值 + 选中航线上的动态飞机 =====
+        const GLOBE_R = 100;
+        function latLngVec(lat, lng, alt) {
+            const phi = (90 - lat) * Math.PI / 180;
+            const theta = (90 - lng) * Math.PI / 180;
+            const R = GLOBE_R * (1 + (alt || 0));
+            return { x: R * Math.sin(phi) * Math.cos(theta), y: R * Math.cos(phi), z: R * Math.sin(phi) * Math.sin(theta) };
+        }
+        function vecToLatLng(x, y, z) {
+            const m = Math.sqrt(x * x + y * y + z * z);
+            const lat = 90 - 180 * Math.acos(Math.max(-1, Math.min(1, y / m))) / Math.PI;
+            let o = Math.atan2(z, x);
+            let lng = 90 - 180 * o / Math.PI - (o < -Math.PI / 2 ? 360 : 0);
+            if (lng < -180) lng += 360; else if (lng > 180) lng -= 360;
+            return { lat, lng };
+        }
+        function greatCirclePts(o, d, n = 96) {
+            const a = latLngVec(o.lt, o.lg, 0), b = latLngVec(d.lt, d.lg, 0);
+            const ma = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+            const mb = Math.sqrt(b.x * b.x + b.y * b.y + b.z * b.z);
+            const A = { x: a.x / ma, y: a.y / ma, z: a.z / ma };
+            const B = { x: b.x / mb, y: b.y / mb, z: b.z / mb };
+            const dot = Math.max(-1, Math.min(1, A.x * B.x + A.y * B.y + A.z * B.z));
+            const om = Math.acos(dot), so = Math.sin(om);
+            const pts = [];
+            for (let i = 0; i <= n; i++) {
+                const t = i / n;
+                let v;
+                if (so < 1e-6) { v = { x: A.x, y: A.y, z: A.z }; }
+                else {
+                    const sa = Math.sin((1 - t) * om) / so;
+                    const sb = Math.sin(t * om) / so;
+                    v = { x: A.x * sa + B.x * sb, y: A.y * sa + B.y * sb, z: A.z * sa + B.z * sb };
+                }
+                pts.push(vecToLatLng(v.x, v.y, v.z));
+            }
+            return pts;
+        }
+        function setObjPos(obj, lat, lng, alt) {
+            const p = latLngVec(lat, lng, alt);
+            obj.position.set(p.x, p.y, p.z);
+        }
+
+        let planeTexCache = null;
+        function makePlaneTexture() {
+            if (planeTexCache) return planeTexCache;
+            const c = document.createElement('canvas');
+            c.width = 64; c.height = 64;
+            const ctx = c.getContext('2d');
+            ctx.font = '44px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.shadowColor = '#7df9ff'; ctx.shadowBlur = 6;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('✈', 32, 33);
+            planeTexCache = new THREE.CanvasTexture(c);
+            return planeTexCache;
+        }
+
+        let planeData = [], planeAnimRaf = null, planeLastT = 0;
+        const PLANE_ALT = 0.07;
+        function startPlane(f) {
+            stopPlane();
+            const o = db[f.origin], d = db[f.dest];
+            if (!o || !d) return;
+            const pts = greatCirclePts(o, d);
+            planeData = [{
+                _isPlane: true, _pts: pts, _t: 0,
+                lat: pts[0].lat, lng: pts[0].lng, altitude: PLANE_ALT,
+                color: '#ffffff', scale: 1.8, opacity: 1
+            }];
+            planeLastT = 0;
+            refreshCustomLayer();
+            planeAnimRaf = requestAnimationFrame(planeAnimLoop);
+        }
+        function stopPlane() {
+            if (planeAnimRaf) { cancelAnimationFrame(planeAnimRaf); planeAnimRaf = null; }
+            if (planeData.length) { planeData = []; refreshCustomLayer(); }
+        }
+        function planeAnimLoop(now) {
+            const p = planeData[0];
+            if (!p) { stopPlane(); return; }
+            if (!planeLastT) planeLastT = now;
+            const dt = Math.min(0.2, (now - planeLastT) / 1000);
+            planeLastT = now;
+            p._t = (p._t + dt * 0.22) % 1;
+            const q = p._pts[Math.round(p._t * (p._pts.length - 1))];
+            p.lat = q.lat; p.lng = q.lng;
+            if (p.__threeObj) setObjPos(p.__threeObj, p.lat, p.lng, p.altitude);
+            planeAnimRaf = requestAnimationFrame(planeAnimLoop);
+        }
+        function refreshCustomLayer() {
+            if (typeof THREE === 'undefined') return;
+            world.customLayerData(glowData.concat(planeData));
         }
 
         // ===== P1/P2 渲染调度：按需渲染 =====
@@ -597,7 +731,7 @@
             if (v !== 'arc') {
                 hubs.forEach(hub => {
                     const cx = getX(hub.lg), cy = getY(hub.lt);
-                    // 光斑（航旅纵横风格：高亮白色中心 + 流量越高光圈越大越亮）
+                    // 光斑（高亮白色中心 + 流量越高光圈越大越亮）
                     const tc = airportTraffic.get(hub.iata) || 0;
                     if (tc > 0) {
                         const r = 4 + tc * 0.8;
@@ -833,6 +967,7 @@
             msg(i18n[lang].sLabel, "#00ffff");
             // 新 CSV 替换旧轨迹
             stopReplay();
+            stopPlane();
             clearAirportFilter(false);
             flights = [];
             selectedId = null;
@@ -877,7 +1012,7 @@
             const ts = time ? (Date.parse(time) || 0) : 0;
             const fid = flight_id || '—';
             const key = `${fid}|${origin}|${dest}|${time || ''}`;
-            return { flight_id: fid, origin, dest, time: time || '', key, ts, dist, dur };
+            return { flight_id: fid, origin, dest, time: time || '', key, ts, dist, dur, airline: airlineOf(fid) };
         }
 
         function sortFlightsAsc() { flights.sort((a, b) => (a.ts - b.ts) || a.key.localeCompare(b.key)); }
@@ -951,6 +1086,7 @@
             filterAirport = iata;
             filterMode = mode;
             selectedId = null;
+            stopPlane();
             syncAutoRotate();
             hideDetail();
             refreshArcStyle();
@@ -1015,7 +1151,7 @@
                     });
                 }
             });
-            world.customLayerData(glowData);
+            refreshCustomLayer();
         }
 
         function renderLayers() {
@@ -1038,6 +1174,7 @@
         function clearAll() {
             if (flights.length > 0 && !confirm(i18n[lang].confirmClear)) return;
             stopReplay();
+            stopPlane();
             selectedId = null;
             clearAirportFilter(false);
             flights = []; rawArcs = []; rawHubs = []; renderArcs = [];
@@ -1067,10 +1204,13 @@
             let dist = 0; const set = new Set();
             flights.forEach(f => { dist += f.dist; set.add(f.origin); set.add(f.dest); });
             const dur = flights.reduce((s, f) => s + f.dur, 0);
+            const airs = new Set(flights.map(f => f.airline).filter(Boolean));
             document.getElementById('st-count').textContent = count;
             document.getElementById('st-dist').textContent = Math.round(dist).toLocaleString();
             document.getElementById('st-dur').textContent = dur.toFixed(1);
             document.getElementById('st-airports').textContent = set.size;
+            document.getElementById('st-airlines').textContent = airs.size;
+            document.getElementById('st-avg').textContent = count ? Math.round(dist / count).toLocaleString() : 0;
         }
 
         // ==========================================
@@ -1100,7 +1240,7 @@
             const names = (o ? o.n : f.origin) + ' → ' + (d ? d.n : f.dest);
             const sel = f.key === selectedId ? ' selected' : '';
             return `<div class="flight-card${sel}" data-fid="${esc(f.key)}">
-                <div class="fc-row1"><span class="fc-id">${esc(f.flight_id)}</span><span class="fc-date">${fmtDate(f.ts)}</span></div>
+                <div class="fc-row1"><span class="fc-id">${esc(f.flight_id)}</span>${f.airline ? `<span class="fc-airline">${esc(f.airline)}</span>` : ''}<span class="fc-date">${fmtDate(f.ts)}</span></div>
                 <div class="fc-row2"><span class="fc-iata">${f.origin}</span><span class="fc-plane">✈</span><span class="fc-iata">${f.dest}</span></div>
                 <div class="fc-names">${esc(names)}</div>
                 <div class="fc-row3"><span>🛫 ${fmtTime(f.ts)}</span><span>⏱ ${f.dur.toFixed(1)}h</span><span>📏 ${Math.round(f.dist)}km</span></div>
@@ -1125,6 +1265,7 @@
             if (f) {
                 focusArc(f, opts.flyMs);
                 if (!opts.noDetail) showDetail(f);
+                startPlane(f);
             }
             const el = document.querySelector(`.flight-card[data-fid="${cssEscape(fid)}"]`);
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1146,6 +1287,7 @@
 
         function clearFocus() {
             stopReplay();
+            stopPlane();
             selectedId = null;
             syncAutoRotate();
             clearAirportFilter(false);
@@ -1192,6 +1334,7 @@
         function startReplay() {
             if (flights.length === 0) { msg(i18n[lang].noReplay); return; }
             stopReplay();
+            stopPlane();
             // 回放时退出机场筛选与单条高亮，避免冲突
             clearAirportFilter(false);
             selectedId = null;
@@ -1239,7 +1382,7 @@
         function showDetail(f) {
             const o = db[f.origin], d = db[f.dest]; if (!o || !d) return;
             const t = i18n[lang];
-            document.getElementById('dc-id').innerHTML = `✈ <b>${esc(f.flight_id)}</b>`;
+            document.getElementById('dc-id').innerHTML = `✈ <b>${esc(f.flight_id)}</b>${f.airline ? `<span class="dc-airline"> · ${esc(f.airline)}</span>` : ''}`;
             document.getElementById('dc-route').innerHTML =
                 `<span class="dc-iata">${f.origin}</span><span class="dc-arrow">→</span><span class="dc-iata">${f.dest}</span>` +
                 `<div class="dc-names">${esc(o.n)} → ${esc(d.n)}</div>`;
@@ -1357,6 +1500,8 @@
             document.getElementById('lbl-dist').innerText = t.stDist;
             document.getElementById('lbl-dur').innerText = t.stDur;
             document.getElementById('lbl-air').innerText = t.stAir;
+            document.getElementById('lbl-airlines').innerText = t.stAirlines;
+            document.getElementById('lbl-avg').innerText = t.stAvg;
             document.getElementById('u-dist').innerText = t.uDist;
             document.getElementById('u-dur').innerText = t.uDur;
             document.getElementById('l-file2').innerText = t.importBtn;
