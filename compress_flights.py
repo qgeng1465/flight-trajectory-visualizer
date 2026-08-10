@@ -35,5 +35,5 @@ def compress_flight_data(input_csv, output_csv):
         print(f"错误：找不到文件 {input_csv}，请确保它在这个文件夹里。")
 
 if __name__ == "__main__":
-    # 执行压缩，生成 compressed_flights.csv
-    compress_flight_data("sample_data.csv", "compressed_flights.csv")
+    # 执行压缩：flights.csv（原始轨迹）-> sample.csv（去重后唯一航线）
+    compress_flight_data("flights.csv", "sample.csv")
