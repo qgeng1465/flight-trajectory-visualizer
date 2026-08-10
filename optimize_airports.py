@@ -23,4 +23,4 @@ def optimize_airport_db(input_file, output_file):
     print(f"优化后规模: {df_clean.shape[0]} 行")
 
 if __name__ == "__main__":
-    optimize_airport_db('airports.csv', 'optimized_airports.csv')
+    optimize_airport_db('airports_raw.csv', 'airports.csv')
