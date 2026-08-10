@@ -2,7 +2,10 @@
 
 **Language:** [English](#english) | [中文](#chinese)
 
-![Flight Footprints preview](Likes.jpg)
+![Flight Footprints](screenshot.png)
+
+![Flight Footprints - imported flights](screenshot-data.png)
+![Flight Footprints - route focus](screenshot-detail.png)
 
 > A **100% local, privacy-first** personal flight tracker — the kind of "flight footprints" logbook popular flight-tracking apps offer, but every trajectory is imported from your own CSV and saved **only in your browser**. No server, no upload, no account.
 
@@ -41,7 +44,7 @@ Minimum columns (header names are flexible & case-insensitive):
 | Destination (IATA) | `dest`, `dest_iata`, `to`, `arr` | `SHE` |
 | Departure time | `time`, `dep_time`, `departure`, `date` | `2025-02-18T10:20:00Z` |
 
-Rows with a missing airport code or `origin == dest` are skipped automatically. See `mysample.csv` for a working example.
+Rows with a missing airport code or `origin == dest` are skipped automatically. See `sample.csv` for a working example.
 
 ## 🛠️ Getting Started
 
@@ -51,7 +54,7 @@ Rows with a missing airport code or `origin == dest` are skipped automatically. 
 
 ## ⚙️ Optional Data Tools
 
-* `optimize_airports.py` — rebuild `optimized_airports.csv` from a raw OurAirports dump.
+* `optimize_airports.py` — rebuild `airports.csv` from a raw OurAirports dump.
 * `compress_flights.py` — aggregate a huge raw trajectory CSV into weighted routes.
 
 ## 🔒 Privacy
@@ -101,7 +104,7 @@ Actively developed. Contributions and feedback are welcome!
 | 目的地(IATA) | `dest`、`dest_iata`、`to`、`arr` | `SHE` |
 | 起飞时间 | `time`、`dep_time`、`departure`、`date` | `2025-02-18T10:20:00Z` |
 
-机场代码缺失或 `起点==终点` 的行会自动跳过。完整示例见 `mysample.csv`。
+机场代码缺失或 `起点==终点` 的行会自动跳过。完整示例见 `sample.csv`。
 
 ## 🛠️ 如何运行
 
@@ -111,7 +114,7 @@ Actively developed. Contributions and feedback are welcome!
 
 ## ⚙️ 可选数据工具
 
-* `optimize_airports.py` —— 从原始 OurAirports 数据重建 `optimized_airports.csv`。
+* `optimize_airports.py` —— 从原始 OurAirports 数据重建 `airports.csv`。
 * `compress_flights.py` —— 把庞大的原始轨迹 CSV 聚合成带权重的航线。
 
 ## 🔒 隐私说明
