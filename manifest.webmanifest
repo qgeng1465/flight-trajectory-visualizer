@@ -3,10 +3,13 @@
   "short_name": "飞行足迹",
   "description": "100% 本地、隐私优先的个人飞行记录簿：导入航班 CSV，在 3D 地球上点亮你的飞行足迹。Personal flight logbook on an interactive WebGL globe — 100% local & privacy-first.",
   "lang": "zh-CN",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
+  "categories": ["travel", "utilities"],
   "background_color": "#04070f",
   "theme_color": "#020617",
   "icons": [

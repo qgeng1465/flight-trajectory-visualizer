@@ -33,6 +33,7 @@ Your data never leaves your device. Imported flights are saved in the browser's 
 * **🛠️ Classic Console:** 3D globe ⇄ 2D map projection, layer toggles, Earth auto-rotation, airport search, and high-res snapshot export (JPG).
 * **⚡ Load Sample / 💾 Export CSV:** One click loads the bundled `sample.csv` to try it out, or exports your current log back to CSV as a backup.
 * **⚖️ Weighted Routes:** A `weight`/`count`/`freq` column (e.g. from `compress_flights.py`) makes one row count as many flights — stats, arc thickness, replay and the CSV export all respect it.
+* **🏷️ Airline Filter & Weight Sort:** Filter flights by airline (flight list + globe arcs update together), sort by flight count, and click the **Busiest route** stat to jump straight to that flight.
 * **📱 Installable PWA (offline-ready):** Add to home screen; core assets are cached locally so the globe still works with no network.
 * **🌐 Bilingual UI:** Full Chinese / English interface.
 
@@ -99,6 +100,7 @@ Actively developed. Contributions and feedback are welcome!
 * **🛠️ 经典控制台：** 3D 地球 ⇄ 2D 展开图、图层控制、地球自转、机场搜索、高清截图导出（JPG）。
 * **⚡ 加载示例 / 💾 导出 CSV：** 一键加载内置 `sample.csv` 体验，或把当前记录导出为 CSV 备份。
 * **⚖️ 加权航线：** 带 `weight`/`count`/`freq` 列（如 `compress_flights.py` 生成）时，一行按 N 次航班计算——统计、航线粗细、回放与导出均尊重权重。
+* **🏷️ 航司筛选 & 按航次排序：** 按航空公司筛选（航班列表与地球弧线联动）、按航次数排序；点击「最高频航线」统计卡可直接聚焦到该航班。
 * **📱 可安装 PWA（离线可用）：** 添加到主屏幕；核心资源本地缓存，断网也能用。
 * **🌐 中英双语界面。**
 
