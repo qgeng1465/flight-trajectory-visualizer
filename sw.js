@@ -1,5 +1,5 @@
 /* ✈ 飞行足迹 · Flight Footprints — offline cache (privacy-first: nothing leaves the browser) */
-const CACHE = 'flight-footprints-v12';
+const CACHE = 'flight-footprints-v13';
 const ASSETS = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const ASSETS = [
   './countries.geojson',
   './earth.jpg',
   './earth-topology.png',
+  './earth-dark.jpg',
   './icon-192.png',
   './icon-512.png',
   './likes.jpg',
