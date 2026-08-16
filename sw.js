@@ -1,5 +1,5 @@
 /* ✈ 飞行足迹 · Flight Footprints — offline cache (privacy-first: nothing leaves the browser) */
-const CACHE = 'flight-footprints-v2';
+const CACHE = 'flight-footprints-v3';
 const ASSETS = [
   './',
   './index.html',
