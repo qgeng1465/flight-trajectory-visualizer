@@ -71,7 +71,7 @@ All flight data is processed **entirely in your browser** and stored in `localSt
 
 Actively developed. Contributions and feedback are welcome!
 
-> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v5`) — otherwise installed-PWA users keep serving the old cached app.
+> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v6`) — otherwise installed-PWA users keep serving the old cached app.
 
 ---
 
@@ -139,7 +139,7 @@ Actively developed. Contributions and feedback are welcome!
 
 持续开发中，欢迎交流与贡献！
 
-> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v5`），否则已安装 PWA 的用户会继续用旧缓存。
+> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v6`），否则已安装 PWA 的用户会继续用旧缓存。
 
 ---
 
