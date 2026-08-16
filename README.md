@@ -37,6 +37,7 @@ Your data never leaves your device. Imported flights are saved in the browser's 
 * **🏷️ Airline Filter & Weight Sort:** Filter flights by airline (flight list + globe arcs update together, matching arcs turn violet), sort by flight count, and click the **Busiest route** stat to jump straight to that flight.
 * **📥 Drag & Drop Import:** Drop any flight CSV straight onto the page to import it — no need to open the file picker.
 * **📱 Installable PWA (offline-ready):** Add to home screen; core assets are cached locally so the globe still works with no network.
+* **🎨 Dual Themes:** Satellite color or a minimal dark palette — arc colors, glow and the 2D map background follow your choice and are remembered between visits.
 * **🌐 Bilingual UI:** Full Chinese / English interface.
 
 ## 🗂️ CSV Format
@@ -72,7 +73,7 @@ All flight data is processed **entirely in your browser** and stored in `localSt
 
 Actively developed. Contributions and feedback are welcome!
 
-> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v9`) — otherwise installed-PWA users keep serving the old cached app.
+> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v10`) — otherwise installed-PWA users keep serving the old cached app.
 
 ---
 
@@ -106,6 +107,7 @@ Actively developed. Contributions and feedback are welcome!
 * **🏷️ 航司筛选 & 按航次排序：** 按航空公司筛选（航班列表与地球弧线联动，匹配航线变紫色）、按航次数排序；点击「最高频航线」统计卡可直接聚焦到该航班。
 * **📥 拖放导入：** 把航班 CSV 直接拖到页面上即可导入，无需打开文件选择器。
 * **📱 可安装 PWA（离线可用）：** 添加到主屏幕；核心资源本地缓存，断网也能用。
+* **🎨 双主题：** 卫星遥感或极简暗色——弧线、光晕与 2D 地图底色随主题切换，并记住你的选择。
 * **🌐 中英双语界面。**
 
 ## 🗂️ CSV 格式
@@ -141,7 +143,7 @@ Actively developed. Contributions and feedback are welcome!
 
 持续开发中，欢迎交流与贡献！
 
-> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v9`），否则已安装 PWA 的用户会继续用旧缓存。
+> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v10`），否则已安装 PWA 的用户会继续用旧缓存。
 
 ---
 
