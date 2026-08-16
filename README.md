@@ -30,7 +30,7 @@ Your data never leaves your device. Imported flights are saved in the browser's 
 * **🌍 Fully Offline Globe:** All libraries are vendored locally and Earth textures + 10m-resolution TopoJSON province boundaries ship with the repo. No map API keys, no network tiles, works without internet.
 * **🔍 Semantic Zoom (LOD):** Airport labels and province borders fade in/out based on camera altitude.
 * **🛫 Airport Route Filter:** Select any airport to display only flights departing from it, or only flights arriving at it.
-* **🛠️ Classic Console:** 3D globe ⇄ 2D map projection, layer toggles, Earth auto-rotation, airport search, and high-res snapshot export (JPG).
+* **🛠️ Classic Console:** 3D globe ⇄ 2D map projection (great-circle arcs), layer toggles, Earth auto-rotation, airport search, and high-res snapshot export (JPG).
 * **⚡ Load Sample / 💾 Export CSV:** One click loads the bundled `sample.csv` to try it out, or exports your current log back to CSV as a backup.
 * **⚖️ Weighted Routes:** A `weight`/`count`/`freq` column (e.g. from `compress_flights.py`) makes one row count as many flights — stats, arc thickness, replay and the CSV export all respect it.
 * **🏷️ Airline Filter & Weight Sort:** Filter flights by airline (flight list + globe arcs update together, matching arcs turn violet), sort by flight count, and click the **Busiest route** stat to jump straight to that flight.
@@ -71,7 +71,7 @@ All flight data is processed **entirely in your browser** and stored in `localSt
 
 Actively developed. Contributions and feedback are welcome!
 
-> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v4`) — otherwise installed-PWA users keep serving the old cached app.
+> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v5`) — otherwise installed-PWA users keep serving the old cached app.
 
 ---
 
@@ -98,7 +98,7 @@ Actively developed. Contributions and feedback are welcome!
 * **🌍 纯离线地球：** 所有依赖库已本地化（vendored），地球贴图与 10m 级 TopoJSON 省界随仓库自带。无需地图 API Key、无网络瓦片，断网也能用。
 * **🔍 智能缩放 (LOD)：** 机场标签与省界随视角高度动态显隐。
 * **🛫 机场航线筛选：** 选择任意机场，可只显示从该机场起飞的航班，或只显示降落在该机场的航班。
-* **🛠️ 经典控制台：** 3D 地球 ⇄ 2D 展开图、图层控制、地球自转、机场搜索、高清截图导出（JPG）。
+* **🛠️ 经典控制台：** 3D 地球 ⇄ 2D 展开图（大圆航线）、图层控制、地球自转、机场搜索、高清截图导出（JPG）。
 * **⚡ 加载示例 / 💾 导出 CSV：** 一键加载内置 `sample.csv` 体验，或把当前记录导出为 CSV 备份。
 * **⚖️ 加权航线：** 带 `weight`/`count`/`freq` 列（如 `compress_flights.py` 生成）时，一行按 N 次航班计算——统计、航线粗细、回放与导出均尊重权重。
 * **🏷️ 航司筛选 & 按航次排序：** 按航空公司筛选（航班列表与地球弧线联动，匹配航线变紫色）、按航次数排序；点击「最高频航线」统计卡可直接聚焦到该航班。
@@ -139,7 +139,7 @@ Actively developed. Contributions and feedback are welcome!
 
 持续开发中，欢迎交流与贡献！
 
-> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v4`），否则已安装 PWA 的用户会继续用旧缓存。
+> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v5`），否则已安装 PWA 的用户会继续用旧缓存。
 
 ---
 
