@@ -59,7 +59,7 @@ The optional **weight** column stands for "this route was flown N times" (e.g. a
 ## ⚙️ Optional Data Tools
 
 * `optimize_airports.py` — rebuild `airports.csv` from a raw OurAirports dump.
-* `compress_flights.py` — aggregate a huge raw trajectory CSV into weighted routes (the app honors the `weight` column it produces).
+* `compress_flights.py` — aggregate a huge raw trajectory CSV into weighted routes, keeping a representative flight number & time (the most recent flight per route) so the compressed CSV still loads with full details; the app honors the `weight` column it produces.
 
 ## 🔒 Privacy
 
@@ -125,7 +125,7 @@ Actively developed. Contributions and feedback are welcome!
 ## ⚙️ 可选数据工具
 
 * `optimize_airports.py` —— 从原始 OurAirports 数据重建 `airports.csv`。
-* `compress_flights.py` —— 把庞大的原始轨迹 CSV 聚合成带权重的航线（应用已支持按其生成的 `weight` 列显示）。
+* `compress_flights.py` —— 把庞大的原始轨迹 CSV 聚合成带权重的航线，每条保留该航线最近一次的航班号与时间作为代表（压缩后仍能完整显示航司与日期）；应用已支持按其生成的 `weight` 列显示。
 
 ## 🔒 隐私说明
 
