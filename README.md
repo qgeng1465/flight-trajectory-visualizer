@@ -52,7 +52,7 @@ Minimum columns (header names are flexible & case-insensitive):
 | Departure time | `time`, `dep_time`, `departure`, `date` | `2025-02-18T10:20:00Z` |
 | Flight count (weight) | `weight`, `count`, `freq` | `3` |
 
-The optional **weight** column stands for "this route was flown N times" (e.g. a CSV produced by `compress_flights.py`). When present, statistics, arc thickness, the export and the trip replay all count weighted totals, so one row can represent many identical flights. Rows with a missing airport code or `origin == dest` are skipped automatically. See `sample.csv` for a working example — it now bundles a few `weight > 1` demo routes (hit **⚡ Load Sample**), so you can see thicker arcs, hot-colored heavy routes and `×N` badges instantly.
+The optional **weight** column stands for "this route was flown N times" (e.g. a CSV produced by `compress_flights.py`). When present, statistics, arc thickness, the export and the trip replay all count weighted totals, so one row can represent many identical flights. Rows with a missing airport code or `origin == dest` are skipped automatically. See `sample.csv` for a working example — it bundles a few `weight > 1` demo routes plus a few international legs (Shanghai→Sydney, Beijing→Tokyo Haneda, Shanghai→Hong Kong), so you can see thicker arcs, hot-colored heavy routes and `×N` badges instantly (hit **⚡ Load Sample**).
 
 ## 🛠️ Getting Started
 
@@ -73,7 +73,7 @@ All flight data is processed **entirely in your browser** and stored in `localSt
 
 Actively developed. Contributions and feedback are welcome!
 
-> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v10`) — otherwise installed-PWA users keep serving the old cached app.
+> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v11`) — otherwise installed-PWA users keep serving the old cached app.
 
 ---
 
@@ -122,7 +122,7 @@ Actively developed. Contributions and feedback are welcome!
 | 起飞时间 | `time`、`dep_time`、`departure`、`date` | `2025-02-18T10:20:00Z` |
 | 飞行次数(权重) | `weight`、`count`、`freq` | `3` |
 
-可选的 **权重（weight）** 列表示「这条航线飞了 N 次」（例如 `compress_flights.py` 生成的 CSV）。带权重时，统计、航线粗细、回放与导出都按加权计算，一行可代表多条相同航线。机场代码缺失或 `起点==终点` 的行会自动跳过。完整示例见 `sample.csv`——其中已内置几条 `weight > 1` 的演示航线（点 **⚡ 加载示例**），可立即看到加粗弧线、重航线热色高亮与 `×N` 徽章。
+可选的 **权重（weight）** 列表示「这条航线飞了 N 次」（例如 `compress_flights.py` 生成的 CSV）。带权重时，统计、航线粗细、回放与导出都按加权计算，一行可代表多条相同航线。机场代码缺失或 `起点==终点` 的行会自动跳过。完整示例见 `sample.csv`——内置几条 `weight > 1` 的演示航线，并含上海→悉尼、北京→东京、上海→香港等国际航段（点 **⚡ 加载示例**），可立即看到加粗弧线、重航线热色高亮、`×N` 徽章与中文机场名。
 
 ## 🛠️ 如何运行
 
@@ -143,7 +143,7 @@ Actively developed. Contributions and feedback are welcome!
 
 持续开发中，欢迎交流与贡献！
 
-> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v10`），否则已安装 PWA 的用户会继续用旧缓存。
+> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v11`），否则已安装 PWA 的用户会继续用旧缓存。
 
 ---
 
