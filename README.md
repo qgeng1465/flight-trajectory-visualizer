@@ -2,6 +2,8 @@
 
 **Language:** [English](#english) | [中文](#chinese)
 
+**🚀 Live Demo:** [![Live Demo](https://img.shields.io/badge/Live%20Demo-Open%20App-2dd4bf?style=for-the-badge)](https://qgeng1465.github.io/flight-trajectory-visualizer/)
+
 ![Flight Footprints](screenshot.png)
 
 ![Flight Footprints - imported flights](screenshot-data.png)
@@ -23,6 +25,12 @@ Your data never leaves your device. Imported flights are saved in the browser's 
 * **📒 Personal Flight Logbook:** A clean side panel lists every flight as a card — flight number, route (IATA ✈ IATA), date, departure time, estimated duration and distance. Sort by time or by distance.
 * **🏷️ Airline Recognition:** Flight numbers are matched against a built-in IATA airline database (China Southern, Air China, China Eastern, Xiamen Air, Spring, VietJet, Jetstar, Qatar, Emirates, etc.) and shown right on the card and in the detail view.
 * **📊 Live Statistics:** Total flights, total distance (km, great-circle / Haversine), total flight time, airports visited, **airlines flown** and **average distance per flight** — recomputed instantly on import.
+* **🌍 Visited-Country Footprints:** A **Countries** stat counts how many countries / regions your flights touched; hover it to see the full list, and every visited place glows teal on the globe.
+* **📏 km ⇄ mi Toggle:** Switch every distance between kilometres and miles (stats, flight list, share card) — remembered between visits.
+* **🕐 Timezone-Aware Times:** A `tz` column (IANA name like `Asia/Shanghai` or an offset like `+08:00`) makes each flight show its correct local date & time; without it, flights fall back to your browser's local time.
+* **📅 Year View:** Filter by year and read one line — *My 2025 — N flights · X km · Y countries*.
+* **📤 Share Card:** One click renders a 1080×1350 share image (your footprint globe + total distance + countries + airlines) to post on WeChat Moments / Xiaohongshu.
+* **⚡ Lite Mode:** For weak laptops — hides the glow, the plane animation, animated arcs and country borders, keeping just cities + routes for smooth sailing; auto-enables on low-core / low-memory devices.
 * **🛫 Animated Aircraft:** Click any flight and a little ✈ aircraft takes off from the origin and flies along the great-circle route to the destination — looping while the route stays selected.
 * **🎯 Route Highlight & Focus:** Click any flight to highlight its arc in gold, dim the rest, and smoothly fly the camera to frame that route. A detail card shows the airline, full airport names, date, duration and distance.
 * **▶ Trip Replay:** Play your flights back chronologically as an animated timeline — the globe follows each leg with a flowing "aircraft" dash animation.
@@ -50,9 +58,32 @@ Minimum columns (header names are flexible & case-insensitive):
 | Origin (IATA) | `origin`, `origin_iata`, `from`, `dep` | `PVG` |
 | Destination (IATA) | `dest`, `dest_iata`, `to`, `arr` | `SHE` |
 | Departure time | `time`, `dep_time`, `departure`, `date` | `2025-02-18T10:20:00Z` |
+| Timezone (optional) | `tz`, `timezone`, `time_zone` | `Asia/Shanghai` or `+08:00` |
 | Flight count (weight) | `weight`, `count`, `freq` | `3` |
 
 The optional **weight** column stands for "this route was flown N times" (e.g. a CSV produced by `compress_flights.py`). When present, statistics, arc thickness, the export and the trip replay all count weighted totals, so one row can represent many identical flights. Rows with a missing airport code or `origin == dest` are skipped automatically. See `sample.csv` for a working example — it bundles a few `weight > 1` demo routes plus a few international legs (Shanghai→Sydney, Beijing→Tokyo Haneda, Shanghai→Hong Kong), so you can see thicker arcs, hot-colored heavy routes and `×N` badges instantly (hit **⚡ Load Sample**).
+
+### 🗺️ Importing from MyFlightradar24 / TripIt
+
+**MyFlightradar24** — its **Export CSV** needs no renaming:
+
+| myFR24 column | App field |
+|---|---|
+| `FlightDate` | date |
+| `Origin` | origin (IATA) |
+| `Destination` | dest (IATA) |
+| `FlightNo` | flight number |
+
+**TripIt**-style exports (API / most importers) use these common columns — all recognized directly:
+
+| TripIt column | App field |
+|---|---|
+| `DepartureDate` (or `DepartureDateTime`; a separate `DepartureTime` is merged in automatically) | date & time |
+| `Origin` / `OriginAirport` / `DepartureAirport` | origin (IATA) |
+| `Destination` / `DestinationAirport` / `ArrivalAirport` | dest (IATA) |
+| `FlightNumber` | flight number |
+
+The header names above are matched case-insensitively. Anything else can simply be renamed to the app's accepted names. Only **IATA airport codes** are matched (e.g. `PVG`, `SHE`) — if your export contains airport *names* instead of codes, swap in a code column.
 
 ## 🛠️ Getting Started
 
@@ -73,7 +104,7 @@ All flight data is processed **entirely in your browser** and stored in `localSt
 
 Actively developed. Contributions and feedback are welcome!
 
-> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v13`) — otherwise installed-PWA users keep serving the old cached app.
+> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v14`) — otherwise installed-PWA users keep serving the old cached app.
 
 ---
 
@@ -93,6 +124,12 @@ Actively developed. Contributions and feedback are welcome!
 * **📒 个人飞行记录簿：** 右侧面板内卡片式清单展示每一程 —— 航班号、航线（IATA ✈ IATA）、日期、起飞时间、估算时长与里程。支持按时间/按里程排序。
 * **🏷️ 航空公司识别：** 内置 IATA 航司数据库（南航、国航、东航、厦航、春秋、越捷、捷星、卡塔尔、阿联酋等），在卡片与详情卡上直接显示航司中文名。
 * **📊 实时统计：** 飞行次数、总里程（km，大圆/Haversine）、总飞行时长、到达机场数，以及 **航空公司数** 与 **平均每程航距** —— 导入即算。
+* **🌍 足迹国家统计：** 新增「国家」统计卡，显示你的足迹到过多少个国家/地区；悬停可看完整名单，到过的国家/地区在地球上以青绿色高亮。
+* **📏 公里 / 英里切换：** 一键把里程单位在 km / mi 之间切换（统计、航班列表、分享卡同步），并记住你的选择。
+* **🕐 时区感知：** 支持 `tz` 列（如 `Asia/Shanghai` 或 `+08:00`），让每一程显示正确的当地时间；未提供时区时自动回退到浏览器本地时间。
+* **📅 年度视图：** 按年份筛选，一行看清「我的 2025 —— N 次飞行 · X km · Y 个国家」。
+* **📤 分享足迹卡：** 一键生成 1080×1350 分享图片（足迹地球 + 总里程 + 国家数 + 航司数），保存后可直接发朋友圈 / 小红书。
+* **⚡ 精简模式：** 弱笔记本福音——隐藏光晕、小飞机动画、动态航线与国界，只保留城市与航线，丝般顺滑；低配设备自动开启。
 * **🛫 动态小飞机：** 点击任一航班，一架 ✈ 小飞机从出发地起飞，沿大圆航线飞往目的地，在选中期间持续往返飞行。
 * **🎯 航线高亮与聚焦：** 点击任一航班，该航线金黄高亮、其余变暗，镜头平滑飞过去框住整条航线；详情卡展示航司、机场全称、日期、时长与里程。
 * **▶ 行程回放：** 按时间顺序把航班逐条回放成动画时间线，地球跟随每一程，带流动的「飞机划过」虚线效果。
@@ -120,9 +157,32 @@ Actively developed. Contributions and feedback are welcome!
 | 出发地(IATA) | `origin`、`origin_iata`、`from`、`dep` | `PVG` |
 | 目的地(IATA) | `dest`、`dest_iata`、`to`、`arr` | `SHE` |
 | 起飞时间 | `time`、`dep_time`、`departure`、`date` | `2025-02-18T10:20:00Z` |
+| 时区(可选) | `tz`、`timezone`、`time_zone` | `Asia/Shanghai` 或 `+08:00` |
 | 飞行次数(权重) | `weight`、`count`、`freq` | `3` |
 
 可选的 **权重（weight）** 列表示「这条航线飞了 N 次」（例如 `compress_flights.py` 生成的 CSV）。带权重时，统计、航线粗细、回放与导出都按加权计算，一行可代表多条相同航线。机场代码缺失或 `起点==终点` 的行会自动跳过。完整示例见 `sample.csv`——内置几条 `weight > 1` 的演示航线，并含上海→悉尼、北京→东京、上海→香港等国际航段（点 **⚡ 加载示例**），可立即看到加粗弧线、重航线热色高亮、`×N` 徽章与中文机场名。
+
+### 🗺️ 从 MyFlightradar24 / TripIt 导入
+
+**MyFlightradar24** —— 其「导出 CSV」几乎可以直接用，无需改名：
+
+| myFR24 列 | 应用字段 |
+|---|---|
+| `FlightDate` | 日期 |
+| `Origin` | 出发地 (IATA) |
+| `Destination` | 目的地 (IATA) |
+| `FlightNo` | 航班号 |
+
+**TripIt** 风格导出（API / 多数导入器）常用以下列，均直接识别：
+
+| TripIt 列 | 应用字段 |
+|---|---|
+| `DepartureDate`（或 `DepartureDateTime`；单独的 `DepartureTime` 会自动合并） | 日期与时间 |
+| `Origin` / `OriginAirport` / `DepartureAirport` | 出发地 (IATA) |
+| `Destination` / `DestinationAirport` / `ArrivalAirport` | 目的地 (IATA) |
+| `FlightNumber` | 航班号 |
+
+以上表头名不区分大小写、直接识别；其它名字只需改回应用支持的列名即可。应用只按 **IATA 机场代码**匹配（如 `PVG`、`SHE`）——如果导出的是机场*名称*，请替换为代码列。
 
 ## 🛠️ 如何运行
 
@@ -143,7 +203,7 @@ Actively developed. Contributions and feedback are welcome!
 
 持续开发中，欢迎交流与贡献！
 
-> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v13`），否则已安装 PWA 的用户会继续用旧缓存。
+> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v14`），否则已安装 PWA 的用户会继续用旧缓存。
 
 ---
 
