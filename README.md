@@ -1,20 +1,54 @@
 # ✈ 飞行足迹 · Flight Footprints
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Open%20App-2dd4bf?style=for-the-badge)](https://qgeng1465.github.io/flight-trajectory-visualizer/)
+[![GitHub stars](https://img.shields.io/github/stars/qgeng1465/flight-trajectory-visualizer?style=social)](https://github.com/qgeng1465/flight-trajectory-visualizer/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/qgeng1465/flight-trajectory-visualizer?style=social)](https://github.com/qgeng1465/flight-trajectory-visualizer/network/members)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![issues](https://img.shields.io/github/issues-raw/qgeng1465/flight-trajectory-visualizer)](https://github.com/qgeng1465/flight-trajectory-visualizer/issues)
+[![GitHub release](https://img.shields.io/github/v/release/qgeng1465/flight-trajectory-visualizer)](https://github.com/qgeng1465/flight-trajectory-visualizer/releases)
+
 **Language:** [English](#english) | [中文](#chinese)
 
-**🚀 Live Demo:** [![Live Demo](https://img.shields.io/badge/Live%20Demo-Open%20App-2dd4bf?style=for-the-badge)](https://qgeng1465.github.io/flight-trajectory-visualizer/)
+> **💡 一句话介绍：** 把你的飞行历史变成 3D 地球上的绚丽足迹 —— 100% 本地、零上传、无账号，单 HTML 文件即开即用。
+
+> **A privacy-first flight tracker.** Import your flight CSV → get a cinematic 3D globe logbook. All data stays in your browser. No server. No account. [Try it live →](https://qgeng1465.github.io/flight-trajectory-visualizer/)
+
+---
 
 ![Flight Footprints](screenshot.png)
+
+<details>
+<summary>📸 更多截图 / More screenshots</summary>
 
 ![Flight Footprints - imported flights](screenshot-data.png)
 ![Flight Footprints - route focus](screenshot-detail.png)
 
-> A **100% local, privacy-first** personal flight tracker — the kind of "flight footprints" logbook popular flight-tracking apps offer, but every trajectory is imported from your own CSV and saved **only in your browser**. No server, no upload, no account.
+</details>
 
 ---
 
 <a id="english"></a>
+
 ## 📖 Overview
+
+**[![Tech Stack](https://img.shields.io/badge/Tech-WebGl-blue)](https://github.com/qgeng1465/flight-trajectory-visualizer)
+[![No-Build](https://img.shields.io/badge/Build-None-green)](https://github.com/qgeng1465/flight-trajectory-visualizer)
+[![Single-File](https://img.shields.io/badge/Deployment-Single%20HTML-orange)](https://github.com/qgeng1465/flight-trajectory-visualizer)
+[![Privacy](https://img.shields.io/badge/Privacy-Local%20Only-brightgreen)](https://github.com/qgeng1465/flight-trajectory-visualizer)
+[![Offline-Ready](https://img.shields.io/badge/Offline-Ready-success)](https://github.com/qgeng1465/flight-trajectory-visualizer)**
+
+**Flight Footprints** turns your personal flight history into a beautiful, interactive 3D globe. Import a simple CSV of your flights (flight number, origin, destination, time) and instantly get a cinematic flight logbook: a chronological flight list, live statistics, airline recognition, route highlighting, an animated aircraft that flies along your selected route — and a full trip replay, all rendered on a WebGL Earth.
+
+Your data never leaves your device. Imported flights are saved in the browser's `localStorage` and **auto-restored on your next visit** — a refresh never loses your log. Import a new CSV to replace it, or hit **✕ Clear Data** (double-confirmed) to wipe everything.
+
+### 🚀 Quick Start (30 seconds)
+
+1. **Download** or clone this repo
+2. **Open** `index.html` in your browser (or run `python -m http.server 8000` to avoid CORS)
+3. **Click** ⚡ Load Sample to see it in action
+4. **Import** your own CSV (see format below) and watch your flights come to life
+
+That's it — no npm install, no build, no backend. Just you and your flight data on your machine.
 
 **Flight Footprints** turns your personal flight history into a beautiful, interactive 3D globe. Import a simple CSV of your flights (flight number, origin, destination, time) and instantly get a cinematic flight logbook: a chronological flight list, live statistics, airline recognition, route highlighting, an animated aircraft that flies along your selected route — and a full trip replay, all rendered on a WebGL Earth.
 
@@ -100,6 +134,21 @@ The header names above are matched case-insensitively. Anything else can simply 
 
 All flight data is processed **entirely in your browser** and stored in `localStorage` under `flightTracker.flights` (auto-restored on your next visit). There is no backend, no analytics, and no network request carrying your data. Clearing data (with confirmation) wipes both the UI and local storage.
 
+## 🤝 Contributing
+
+Contributions of all kinds are welcome! Feel free to:
+
+- **Report bugs** via [GitHub Issues](https://github.com/qgeng1465/flight-trajectory-visualizer/issues)
+- **Suggest features** (year view, more import formats, new visualizations, etc.)
+- **Improve docs** (README, comments, code examples)
+- **Submit PRs** (bug fixes, new features, performance optimizations)
+
+This project is written in vanilla JS with zero dependencies beyond the vendored libraries — PRs should keep it lightweight and local-only.
+
+## 📄 License
+
+[MIT License](LICENSE) — feel free to use, modify, and distribute this project for personal or commercial purposes. Attribution is appreciated but not required.
+
 ## 🚧 Status
 
 Actively developed. Contributions and feedback are welcome!
@@ -109,11 +158,33 @@ Actively developed. Contributions and feedback are welcome!
 ---
 
 <a id="chinese"></a>
+
 # ✈ 飞行足迹（纯本地 · 隐私优先）
 
-> 一个 **100% 本地、隐私优先** 的个人飞行轨迹记录器 —— 类似常用出行 App 里的「飞行足迹」，但所有轨迹都由你从本地 CSV 导入，并且**只保存在你自己的浏览器里**。无服务器、不上传、无需账号。
+> **💡 一句话介绍：** 把你的飞行历史变成 3D 地球上的绚丽足迹 —— 100% 本地、零上传、无账号，单 HTML 文件即开即用。
+
+一个 **100% 本地、隐私优先** 的个人飞行轨迹记录器 —— 类似常用出行 App 里的「飞行足迹」，但所有轨迹都由你从本地 CSV 导入，并且**只保存在你自己的浏览器里**。无服务器、不上传、无需账号。
 
 ## 📖 项目简介
+
+**[![技术栈](https://img.shields.io/badge/技术栈-WebGl-blue)](https://github.com/qgeng1465/flight-trajectory-visualizer)
+[![无需构建](https://img.shields.io/badge/构建-无-green)](https://github.com/qgeng1465/flight-trajectory-visualizer)
+[![单文件部署](https://img.shields.io/badge/部署-单%20HTML-orange)](https://github.com/qgeng1465/flight-trajectory-visualizer)
+[![隐私保护](https://img.shields.io/badge/隐私-纯本地-brightgreen)](https://github.com/qgeng1465/flight-trajectory-visualizer)
+[![离线可用](https://img.shields.io/badge/离线-支持-success)](https://github.com/qgeng1465/flight-trajectory-visualizer)**
+
+**飞行足迹** 把你的个人飞行历史变成一颗精美的交互式 3D 地球。导入一份简单的航班 CSV（航班号、出发地、目的地、时间），即可获得一份电影感的飞行记录簿：按时间排列的航班清单、实时统计、**航空公司识别**、航线高亮动画，以及一个会**沿着选中航线飞行的小飞机** —— 全部渲染在 WebGL 地球上。
+
+你的数据绝不离开本机。导入的航班保存在浏览器 `localStorage`，**刷新或重新打开页面都会自动恢复上次的记录**；导入新 CSV 会替换旧数据，点「✕ 清除数据」可彻底清空（带二次确认）。
+
+### 🚀 三步上手（30 秒）
+
+1. **下载** 或克隆本项目
+2. **打开** `index.html` 浏览器（或运行 `python -m http.server 8000` 避免跨域）
+3. **点击** ⚡ 加载示例 体验效果
+4. **导入** 你的 CSV（见下方格式）即可点亮你的飞行足迹
+
+就这些 —— 无需 npm install，无需构建，无需后端。只是你和你的飞行数据，在本机运行。
 
 **飞行足迹** 把你的个人飞行历史变成一颗精美的交互式 3D 地球。导入一份简单的航班 CSV（航班号、出发地、目的地、时间），即可获得一份电影感的飞行记录簿：按时间排列的航班清单、实时统计、**航空公司识别**、航线高亮动画，以及一个会**沿着选中航线飞行的小飞机** —— 全部渲染在 WebGL 地球上。
 
@@ -198,6 +269,21 @@ Actively developed. Contributions and feedback are welcome!
 ## 🔒 隐私说明
 
 所有飞行数据**完全在你的浏览器内处理**，存储在 `localStorage` 的 `flightTracker.flights` 键下（下次打开自动恢复）。没有后端、没有统计上报、没有任何携带你数据的网络请求。清除数据（带二次确认）会同时清空界面与本地存储。
+
+## 🤝 贡献指南
+
+欢迎各种形式的贡献！你可以：
+
+- **报告 bug** 通过 [GitHub Issues](https://github.com/qgeng1465/flight-trajectory-visualizer/issues)
+- **建议功能**（年度视图、更多导入格式、新可视化等）
+- **改进文档**（README、注释、代码示例）
+- **提交 PR**（bug 修复、新功能、性能优化）
+
+本项目用原生 JS 编写，除已内嵌的库外零依赖 —— 请保持轻量和纯本地。
+
+## 📄 开源许可
+
+[MIT License](LICENSE) —— 个人或商业用途均可自由使用、修改和分发本代码。署名感谢但非强制。
 
 ## 🚧 开发状态
 
