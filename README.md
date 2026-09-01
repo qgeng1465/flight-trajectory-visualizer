@@ -147,7 +147,7 @@ This project is written in vanilla JS with zero dependencies beyond the vendored
 
 ## 📄 License
 
-[MIT License](LICENSE) — feel free to use, modify, and distribute this project for personal or commercial purposes. Attribution is appreciated but not required.
+[MIT License](LICENSE) — **for academic and personal use only.** Commercial use is not permitted. Attribution is appreciated.
 
 ## 🚧 Status
 
@@ -283,7 +283,7 @@ Actively developed. Contributions and feedback are welcome!
 
 ## 📄 开源许可
 
-[MIT License](LICENSE) —— 个人或商业用途均可自由使用、修改和分发本代码。署名感谢但非强制。
+[MIT License](LICENSE) —— **仅限学术和个人使用**，不得用于商业用途。署名感谢但非强制。
 
 ## 🚧 开发状态
 
