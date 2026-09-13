@@ -11,7 +11,7 @@
 
 > **💡 一句话介绍：** 把你的飞行历史变成 3D 地球上的绚丽足迹 —— 100% 本地、零上传、无账号，单 HTML 文件即开即用。
 
-> **A privacy-first flight tracker.** Import your flight CSV → get a cinematic 3D globe logbook. All data stays in your browser. No server. No account. [Try it live →](https://qgeng1465.github.io/flight-trajectory-visualizer/)
+> **A privacy-first flight tracker.** Import your flight CSV → get a cinematic 3D globe logbook. There is no server and no account: the app runs entirely in your browser and nothing is ever uploaded. The only way your data leaves the machine is the share link *you* generate and hand out yourself. [Try it live →](https://qgeng1465.github.io/flight-trajectory-visualizer/)
 
 ---
 
@@ -30,6 +30,9 @@
 
 **Route focus with the animated aircraft · 航线聚焦**
 ![Flight Footprints - route focus](screenshot-detail.png)
+
+**A friend's share link, offered before it touches your log · 收到分享链接**
+![Flight Footprints - a shared flight log](screenshot-share.png)
 
 </details>
 
@@ -74,6 +77,7 @@ Your data never leaves your device. Imported flights are saved in the browser's 
 * **🕐 Timezone-Aware Times:** A `tz` column (IANA name like `Asia/Shanghai` or an offset like `+08:00`) makes each flight show its correct local date & time; without it, flights fall back to your browser's local time.
 * **📅 Year View:** Filter by year and read one line — *My 2025 — N flights · X km · Y countries*.
 * **📤 Share Card:** One click renders a 1080×1350 share image (your footprint globe + total distance + countries + airlines) to post on WeChat Moments / Xiaohongshu.
+* **🔗 Share Link:** **🔗 Share link** compresses your whole log into the URL fragment and copies it, so a friend opening it gets your actual footprints — not a picture. The payload rides after the `#`, which browsers never send in an HTTP request, so the page host sees nothing; the data goes only to whoever you hand the link to. They get an offer banner ("65 flights · 105,235 km · 6 countries") with **merge into my log** or **dismiss** — opening a link never silently overwrites their own data. A 38-row log is a ~1,000-character link.
 * **⚡ Lite Mode:** For weak laptops — hides the glow, the plane animation, animated arcs and country borders, keeping just cities + routes for smooth sailing; auto-enables on low-core / low-memory devices.
 * **🛫 Animated Aircraft:** Click any flight and a little ✈ aircraft takes off from the origin and flies the route to the destination — looping while the route stays selected.
 * **🛬 Altitude Profiles:** Routes are drawn as climb–cruise–descent profiles rather than flat hoops — both ends come down to the surface, the climb/descent are given 18 and 24 minutes, and the cruise height scales with the great-circle distance, so a short hop and a long-haul arch to visibly different heights. The aircraft flies that same profile, not a fixed height above the globe.
@@ -216,6 +220,7 @@ Actively developed. Contributions and feedback are welcome!
 * **🕐 时区感知：** 支持 `tz` 列（如 `Asia/Shanghai` 或 `+08:00`），让每一程显示正确的当地时间；未提供时区时自动回退到浏览器本地时间。
 * **📅 年度视图：** 按年份筛选，一行看清「我的 2025 —— N 次飞行 · X km · Y 个国家」。
 * **📤 分享足迹卡：** 一键生成 1080×1350 分享图片（足迹地球 + 总里程 + 国家数 + 航司数），保存后可直接发朋友圈 / 小红书。
+* **🔗 分享链接：** 点 **🔗 分享链接** 把整份记录压缩进 URL 片段并复制到剪贴板——朋友打开看到的是真实足迹，而不是一张图。数据放在 `#` 之后，浏览器发 HTTP 请求时不会带上这一段，所以托管页面的一方看不到任何内容，只有你主动发给的人能看到。对方会看到一条提示条（「65 次飞行 · 105,235 km · 6 个国家」），可选 **并入我的记录** 或 **忽略**——打开链接绝不会悄悄覆盖他自己的数据。38 条记录约 1000 字符。
 * **⚡ 精简模式：** 弱笔记本福音——隐藏光晕、小飞机动画、动态航线与国界，只保留城市与航线，丝般顺滑；低配设备自动开启。
 * **🛫 动态小飞机：** 点击任一航班，一架 ✈ 小飞机从出发地起飞，沿航线飞往目的地，在选中期间持续往返飞行。
 * **🛬 高度剖面航线：** 航线按「爬升—巡航—下降」绘制，而不是等高的弧：起降两端落回地面，爬升/下降各按 18 / 24 分钟展开，巡航高度随大圆距离缩放——短程与长程的拱高一眼可辨。小飞机沿同一条剖面飞行，不再是贴着地球的固定高度。
