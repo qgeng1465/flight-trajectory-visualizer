@@ -44,11 +44,13 @@ Your data never leaves your device. Imported flights are saved in the browser's 
 ### 🚀 Quick Start (30 seconds)
 
 1. **Download** or clone this repo
-2. **Open** `index.html` in your browser (or run `python -m http.server 8000` to avoid CORS)
+2. **Start the local server** — double-click `Start_Server.bat` (Windows) or run `./start_server.sh` (macOS / Linux). Both just run `python -m http.server`; any static server works. Then open <http://localhost:8000>.
 3. **Click** ⚡ Load Sample to see it in action
 4. **Import** your own CSV (see format below) and watch your flights come to life
 
 That's it — no npm install, no build, no backend. Just you and your flight data on your machine.
+
+> **⚠️ Don't just double-click `index.html`.** Browsers block a page opened from disk (`file://`) from reading `airports.csv`, so search and the sample data would not work. The app detects this and tells you what to do, but starting the server is the fix. The server binds to `127.0.0.1` only, so your flight log is never exposed to the network.
 
 **Flight Footprints** turns your personal flight history into a beautiful, interactive 3D globe. Import a simple CSV of your flights (flight number, origin, destination, time) and instantly get a cinematic flight logbook: a chronological flight list, live statistics, airline recognition, route highlighting, an animated aircraft that flies along your selected route — and a full trip replay, all rendered on a WebGL Earth.
 
@@ -121,7 +123,7 @@ The header names above are matched case-insensitively. Anything else can simply 
 
 ## 🛠️ Getting Started
 
-1. **Start the local server:** double-click `Start_Server.bat` (runs `python -m http.server 8000` to bypass browser CORS). A browser tab opens automatically.
+1. **Start the local server:** double-click `Start_Server.bat` on Windows, or run `./start_server.sh` on macOS / Linux (both run `python -m http.server 8000`; add a port as the first argument to change it). A browser tab opens automatically. Any other static server — `npx serve`, VS Code Live Server — works just as well.
 2. **Import your flights:** in the "✈ 我的飞行足迹" panel (right side), choose your `.csv` — or hit **⚡ 加载示例** to load the bundled sample data. Statistics and the flight list populate immediately and are saved automatically.
 3. **Explore:** click a flight to watch the aircraft fly its route, hit **▶ 行程回放** for a cinematic replay, toggle 2D/3D, themes and rotation from the right console.
 
@@ -154,7 +156,7 @@ This project is written in vanilla JS with zero dependencies beyond the vendored
 
 Actively developed. Contributions and feedback are welcome!
 
-> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v16`) — otherwise installed-PWA users keep serving the old cached app.
+> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v17`) — otherwise installed-PWA users keep serving the old cached app.
 
 ---
 
@@ -181,11 +183,13 @@ Actively developed. Contributions and feedback are welcome!
 ### 🚀 三步上手（30 秒）
 
 1. **下载** 或克隆本项目
-2. **打开** `index.html` 浏览器（或运行 `python -m http.server 8000` 避免跨域）
+2. **启动本地服务** —— Windows 双击 `Start_Server.bat`，macOS / Linux 运行 `./start_server.sh`（两者都只是执行 `python -m http.server`；任何静态服务器都可以）。然后打开 <http://localhost:8000>。
 3. **点击** ⚡ 加载示例 体验效果
 4. **导入** 你的 CSV（见下方格式）即可点亮你的飞行足迹
 
 就这些 —— 无需 npm install，无需构建，无需后端。只是你和你的飞行数据，在本机运行。
+
+> **⚠️ 不要直接双击 `index.html`。** 浏览器不允许 `file://` 打开的页面读取 `airports.csv`，搜索和示例数据都会失效。应用会检测到这种情况并给出提示，但正确的做法就是起一个本地服务。该服务只监听 `127.0.0.1`，你的飞行记录不会被暴露到网络上。
 
 **飞行足迹** 把你的个人飞行历史变成一颗精美的交互式 3D 地球。导入一份简单的航班 CSV（航班号、出发地、目的地、时间），即可获得一份电影感的飞行记录簿：按时间排列的航班清单、实时统计、**航空公司识别**、航线高亮动画，以及一个会**沿着选中航线飞行的小飞机** —— 全部渲染在 WebGL 地球上。
 
@@ -258,7 +262,7 @@ Actively developed. Contributions and feedback are welcome!
 
 ## 🛠️ 如何运行
 
-1. **启动本地服务：** 双击 `Start_Server.bat`（内部执行 `python -m http.server 8000` 以绕过浏览器跨域限制），浏览器会自动打开。
+1. **启动本地服务：** Windows 双击 `Start_Server.bat`，macOS / Linux 运行 `./start_server.sh`（两者内部都执行 `python -m http.server 8000`；首个参数可指定端口），浏览器会自动打开。其它静态服务器（`npx serve`、VS Code Live Server 等）同样可用。
 2. **导入航班：** 在右侧「✈ 我的飞行足迹」面板选择你的 `.csv`（或点 **⚡ 加载示例** 体验），统计与航班清单即刻生成并自动保存，下次打开自动恢复。
 3. **开始探索：** 点击航班看小飞机飞完整条航线，点 **▶ 行程回放** 看电影式回放；右侧控制台可切换 2D/3D、主题与自转。
 
@@ -291,7 +295,7 @@ Actively developed. Contributions and feedback are welcome!
 
 持续开发中，欢迎交流与贡献！
 
-> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v16`），否则已安装 PWA 的用户会继续用旧缓存。
+> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v17`），否则已安装 PWA 的用户会继续用旧缓存。
 
 ---
 

@@ -1,5 +1,5 @@
 /* ✈ 飞行足迹 · Flight Footprints — offline cache (privacy-first: nothing leaves the browser) */
-const CACHE = 'flight-footprints-v16';
+const CACHE = 'flight-footprints-v17';
 const ASSETS = [
   './',
   './index.html',
@@ -36,10 +36,28 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+// Data files (airports.csv, countries.geojson, sample.csv) are the ones people
+// actually edit or swap when running this locally, so they are served
+// network-first: always take the fresh copy when online, fall back to the
+// cache offline. Everything else is cache-first (see below).
+const IS_DATA = /\.(csv|geojson)$/i;
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   if (new URL(req.url).origin !== location.origin) return;
+  if (IS_DATA.test(new URL(req.url).pathname)) {
+    e.respondWith(
+      fetch(req)
+        .then((res) => {
+          const cp = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, cp)).catch(() => {});
+          return res;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req)
