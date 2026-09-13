@@ -39,7 +39,7 @@
 
 **Flight Footprints** turns your personal flight history into a beautiful, interactive 3D globe. Import a simple CSV of your flights (flight number, origin, destination, time) and instantly get a cinematic flight logbook: a chronological flight list, live statistics, airline recognition, route highlighting, an animated aircraft that flies along your selected route — and a full trip replay, all rendered on a WebGL Earth.
 
-Your data never leaves your device. Imported flights are saved in the browser's `localStorage` and **auto-restored on your next visit** — a refresh never loses your log. Import a new CSV to replace it, or hit **✕ Clear Data** (double-confirmed) to wipe everything.
+Your data never leaves your device. Imported flights are saved in the browser's `localStorage` and **auto-restored on your next visit** — a refresh never loses your log. A new CSV is **merged into** what you already have and **de-duplicated** (same flight number, route and time = one entry), so you can import your history a chunk at a time; hit **✕ Clear Data** (double-confirmed) first if you want to replace the log outright.
 
 ### 🚀 Quick Start (30 seconds)
 
@@ -52,14 +52,14 @@ That's it — no npm install, no build, no backend. Just you and your flight dat
 
 **Flight Footprints** turns your personal flight history into a beautiful, interactive 3D globe. Import a simple CSV of your flights (flight number, origin, destination, time) and instantly get a cinematic flight logbook: a chronological flight list, live statistics, airline recognition, route highlighting, an animated aircraft that flies along your selected route — and a full trip replay, all rendered on a WebGL Earth.
 
-Your data never leaves your device. Imported flights are saved in the browser's `localStorage` and **auto-restored on your next visit** — a refresh never loses your log. Import a new CSV to replace it, or hit **✕ Clear Data** (double-confirmed) to wipe everything.
+Your data never leaves your device. Imported flights are saved in the browser's `localStorage` and **auto-restored on your next visit** — a refresh never loses your log. A new CSV is **merged into** what you already have and **de-duplicated** (same flight number, route and time = one entry), so you can import your history a chunk at a time; hit **✕ Clear Data** (double-confirmed) first if you want to replace the log outright.
 
 ## ✨ Core Features
 
 * **📒 Personal Flight Logbook:** A clean side panel lists every flight as a card — flight number, route (IATA ✈ IATA), date, departure time, estimated duration and distance. Sort by time or by distance.
 * **🏷️ Airline Recognition:** Flight numbers are matched against a built-in IATA airline database (China Southern, Air China, China Eastern, Xiamen Air, Spring, VietJet, Jetstar, Qatar, Emirates, etc.) and shown right on the card and in the detail view.
 * **📊 Live Statistics:** Total flights, total distance (km, great-circle / Haversine), total flight time, airports visited, **airlines flown** and **average distance per flight** — recomputed instantly on import.
-* **🌍 Visited-Country Footprints:** A **Countries** stat counts how many countries / regions your flights touched; hover it to see the full list, and every visited place glows teal on the globe.
+* **🌍 Visited-Country Footprints:** A **Countries** stat counts how many countries / regions your flights touched; hover it to see the full list, and every visited place glows teal on the globe. Country attribution is keyed off OurAirports' own ISO codes, so France, Norway and Kosovo are counted as themselves instead of collapsing into a single bogus `-99` bucket.
 * **📏 km ⇄ mi Toggle:** Switch every distance between kilometres and miles (stats, flight list, share card) — remembered between visits.
 * **🕐 Timezone-Aware Times:** A `tz` column (IANA name like `Asia/Shanghai` or an offset like `+08:00`) makes each flight show its correct local date & time; without it, flights fall back to your browser's local time.
 * **📅 Year View:** Filter by year and read one line — *My 2025 — N flights · X km · Y countries*.
@@ -68,10 +68,10 @@ Your data never leaves your device. Imported flights are saved in the browser's 
 * **🛫 Animated Aircraft:** Click any flight and a little ✈ aircraft takes off from the origin and flies along the great-circle route to the destination — looping while the route stays selected.
 * **🎯 Route Highlight & Focus:** Click any flight to highlight its arc in gold, dim the rest, and smoothly fly the camera to frame that route. A detail card shows the airline, full airport names, date, duration and distance.
 * **▶ Trip Replay:** Play your flights back chronologically as an animated timeline — the globe follows each leg with a flowing "aircraft" dash animation.
-* **💾 Local-Only Persistence (localStorage):** Flights are saved in your browser and **auto-restored on your next visit** — a refresh never loses your log. A new import replaces it; **✕ Clear Data** (double-confirmed) wipes it for good. **Nothing is ever uploaded.**
+* **💾 Local-Only Persistence (localStorage):** Flights are saved in your browser and **auto-restored on your next visit** — a refresh never loses your log. New imports are **merged and de-duplicated** into the existing log (add as many CSVs as you like — overlapping rows are skipped and reported); **✕ Clear Data** (double-confirmed) wipes it for good. **Nothing is ever uploaded.**
 * **🌍 Fully Offline Globe:** All libraries are vendored locally and Earth textures + 10m-resolution TopoJSON province boundaries ship with the repo. No map API keys, no network tiles, works without internet.
 * **🔍 Semantic Zoom (LOD):** Airport labels and province borders fade in/out based on camera altitude.
-* **🔎 Chinese / English Airport Search:** Type an IATA code, an English name, or a Chinese city name (上海, 北京, 纽约…) to jump straight to an airport.
+* **🔎 Smart Airport Search:** Type an IATA code, an English name, a **city** (New York, Paris, Sydney…), a local-language keyword (München, 東京) or a Chinese name (上海, 北京, 纽约…). Results are **ranked by relevance** (exact code → code prefix → exact city → city/name prefix → keyword), matched text is **highlighted**, cities are shown next to each airport, and **↑ / ↓ / Enter / Esc** drive the list without touching the mouse.
 * **🛫 Airport Route Filter:** Select any airport to display only flights departing from it, or only flights arriving at it.
 * **🛠️ Classic Console:** 3D globe ⇄ 2D map projection (great-circle arcs), layer toggles, Earth auto-rotation, airport search, and high-res snapshot export (JPG).
 * **⚡ Load Sample / 💾 Export CSV:** One click loads the bundled `sample.csv` to try it out, or exports your current log back to CSV as a backup.
@@ -127,7 +127,8 @@ The header names above are matched case-insensitively. Anything else can simply 
 
 ## ⚙️ Optional Data Tools
 
-* `optimize_airports.py` — rebuild `airports.csv` from a raw OurAirports dump.
+* `enrich_countries.py` — the rebuild that produces the **bundled** data: joins OurAirports `airports.csv` + `countries.csv` onto Natural Earth 110m/10m geometry, emitting `airports.csv` (IATA, name, coordinates, type, English + Chinese country name, ISO, city, search keywords) and `countries.geojson`. It keeps large & medium airports **plus small airports that have scheduled passenger service**, and reads Natural Earth's `ISO_A2_EH` column so France / Norway / Kosovo get their real codes instead of `-99`.
+* `optimize_airports.py` — minimal IATA-only rebuild of `airports.csv` from a raw OurAirports dump.
 * `compress_flights.py` — aggregate a huge raw trajectory CSV into weighted routes, keeping a representative flight number & time (the most recent flight per route) so the compressed CSV still loads with full details; the app honors the `weight` column it produces.
 
 ## 🔒 Privacy
@@ -153,7 +154,7 @@ This project is written in vanilla JS with zero dependencies beyond the vendored
 
 Actively developed. Contributions and feedback are welcome!
 
-> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v14`) — otherwise installed-PWA users keep serving the old cached app.
+> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v16`) — otherwise installed-PWA users keep serving the old cached app.
 
 ---
 
@@ -175,7 +176,7 @@ Actively developed. Contributions and feedback are welcome!
 
 **飞行足迹** 把你的个人飞行历史变成一颗精美的交互式 3D 地球。导入一份简单的航班 CSV（航班号、出发地、目的地、时间），即可获得一份电影感的飞行记录簿：按时间排列的航班清单、实时统计、**航空公司识别**、航线高亮动画，以及一个会**沿着选中航线飞行的小飞机** —— 全部渲染在 WebGL 地球上。
 
-你的数据绝不离开本机。导入的航班保存在浏览器 `localStorage`，**刷新或重新打开页面都会自动恢复上次的记录**；导入新 CSV 会替换旧数据，点「✕ 清除数据」可彻底清空（带二次确认）。
+你的数据绝不离开本机。导入的航班保存在浏览器 `localStorage`，**刷新或重新打开页面都会自动恢复上次的记录**；导入新 CSV 会**并入**已有记录并**自动去重**（航班号、航线、时间都相同即视为同一条），可以分多次导入；想整份替换，先点「✕ 清除数据」再导入即可。
 
 ### 🚀 三步上手（30 秒）
 
@@ -188,14 +189,14 @@ Actively developed. Contributions and feedback are welcome!
 
 **飞行足迹** 把你的个人飞行历史变成一颗精美的交互式 3D 地球。导入一份简单的航班 CSV（航班号、出发地、目的地、时间），即可获得一份电影感的飞行记录簿：按时间排列的航班清单、实时统计、**航空公司识别**、航线高亮动画，以及一个会**沿着选中航线飞行的小飞机** —— 全部渲染在 WebGL 地球上。
 
-你的数据绝不离开本机。导入的航班保存在浏览器 `localStorage`，**刷新或重新打开页面都会自动恢复上次的记录**；导入新 CSV 会替换旧数据，点「✕ 清除数据」可彻底清空（带二次确认）。
+你的数据绝不离开本机。导入的航班保存在浏览器 `localStorage`，**刷新或重新打开页面都会自动恢复上次的记录**；导入新 CSV 会**并入**已有记录并**自动去重**（航班号、航线、时间都相同即视为同一条），可以分多次导入；想整份替换，先点「✕ 清除数据」再导入即可。
 
 ## ✨ 核心功能
 
 * **📒 个人飞行记录簿：** 右侧面板内卡片式清单展示每一程 —— 航班号、航线（IATA ✈ IATA）、日期、起飞时间、估算时长与里程。支持按时间/按里程排序。
 * **🏷️ 航空公司识别：** 内置 IATA 航司数据库（南航、国航、东航、厦航、春秋、越捷、捷星、卡塔尔、阿联酋等），在卡片与详情卡上直接显示航司中文名。
 * **📊 实时统计：** 飞行次数、总里程（km，大圆/Haversine）、总飞行时长、到达机场数，以及 **航空公司数** 与 **平均每程航距** —— 导入即算。
-* **🌍 足迹国家统计：** 新增「国家」统计卡，显示你的足迹到过多少个国家/地区；悬停可看完整名单，到过的国家/地区在地球上以青绿色高亮。
+* **🌍 足迹国家统计：** 新增「国家」统计卡，显示你的足迹到过多少个国家/地区；悬停可看完整名单，到过的国家/地区在地球上以青绿色高亮。国家归属以 OurAirports 的 ISO 代码为准，法国、挪威、科索沃会各自计数，不会再一起掉进一个错误的 `-99` 桶里。
 * **📏 公里 / 英里切换：** 一键把里程单位在 km / mi 之间切换（统计、航班列表、分享卡同步），并记住你的选择。
 * **🕐 时区感知：** 支持 `tz` 列（如 `Asia/Shanghai` 或 `+08:00`），让每一程显示正确的当地时间；未提供时区时自动回退到浏览器本地时间。
 * **📅 年度视图：** 按年份筛选，一行看清「我的 2025 —— N 次飞行 · X km · Y 个国家」。
@@ -204,10 +205,10 @@ Actively developed. Contributions and feedback are welcome!
 * **🛫 动态小飞机：** 点击任一航班，一架 ✈ 小飞机从出发地起飞，沿大圆航线飞往目的地，在选中期间持续往返飞行。
 * **🎯 航线高亮与聚焦：** 点击任一航班，该航线金黄高亮、其余变暗，镜头平滑飞过去框住整条航线；详情卡展示航司、机场全称、日期、时长与里程。
 * **▶ 行程回放：** 按时间顺序把航班逐条回放成动画时间线，地球跟随每一程，带流动的「飞机划过」虚线效果。
-* **💾 纯本地持久化（localStorage）：** 航班保存在浏览器里，**下次打开自动恢复，刷新不丢数据**。导入新 CSV 会替换旧记录；「✕ 清除数据」（带二次确认）彻底清空。**绝不上传任何数据。**
+* **💾 纯本地持久化（localStorage）：** 航班保存在浏览器里，**下次打开自动恢复，刷新不丢数据**。导入新 CSV 会**并入并去重**到现有记录（可反复导入，重复行自动跳过并提示）；「✕ 清除数据」（带二次确认）彻底清空。**绝不上传任何数据。**
 * **🌍 纯离线地球：** 所有依赖库已本地化（vendored），地球贴图与 10m 级 TopoJSON 省界随仓库自带。无需地图 API Key、无网络瓦片，断网也能用。
 * **🔍 智能缩放 (LOD)：** 机场标签与省界随视角高度动态显隐。
-* **🔎 中英机场搜索：** 输入 IATA 代码、英文名或中文城市名（上海、北京、纽约…）即可直接跳转定位机场。
+* **🔎 智能机场搜索：** 支持 IATA 代码、英文名、**城市名**（纽约、巴黎、悉尼…）、本地语言关键词（München、東京）与中文名（上海、北京、纽约…）。结果**按相关度排序**（代码完全匹配 → 代码前缀 → 城市完全匹配 → 城市/机场名前缀 → 关键词），命中文字**高亮**显示，机场旁标出所在城市，并可用 **↑ / ↓ / Enter / Esc** 全键盘选择。
 * **🛫 机场航线筛选：** 选择任意机场，可只显示从该机场起飞的航班，或只显示降落在该机场的航班。
 * **🛠️ 经典控制台：** 3D 地球 ⇄ 2D 展开图（大圆航线）、图层控制、地球自转、机场搜索、高清截图导出（JPG）。
 * **⚡ 加载示例 / 💾 导出 CSV：** 一键加载内置 `sample.csv` 体验，或把当前记录导出为 CSV 备份。
@@ -263,7 +264,8 @@ Actively developed. Contributions and feedback are welcome!
 
 ## ⚙️ 可选数据工具
 
-* `optimize_airports.py` —— 从原始 OurAirports 数据重建 `airports.csv`。
+* `enrich_countries.py` —— 生成仓库内**内置数据**的脚本：把 OurAirports 的 `airports.csv` + `countries.csv` 关联到 Natural Earth 110m/10m 几何，产出 `airports.csv`（IATA、名称、经纬度、类型、英文/中文国家名、ISO、城市、搜索关键词）与 `countries.geojson`。保留大/中型机场，**并额外保留有定期客运航班的小型机场**；国家代码读取 Natural Earth 的 `ISO_A2_EH` 列，因此法国/挪威/科索沃拿到的是真实代码而非 `-99`。
+* `optimize_airports.py` —— 仅保留 IATA 代码的极简重建脚本，从原始 OurAirports 数据生成 `airports.csv`。
 * `compress_flights.py` —— 把庞大的原始轨迹 CSV 聚合成带权重的航线，每条保留该航线最近一次的航班号与时间作为代表（压缩后仍能完整显示航司与日期）；应用已支持按其生成的 `weight` 列显示。
 
 ## 🔒 隐私说明
@@ -289,7 +291,7 @@ Actively developed. Contributions and feedback are welcome!
 
 持续开发中，欢迎交流与贡献！
 
-> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v14`），否则已安装 PWA 的用户会继续用旧缓存。
+> **开发提示：** 每次发布更新时，记得同步 bump `sw.js` 里的版本号（当前为 `flight-footprints-v16`），否则已安装 PWA 的用户会继续用旧缓存。
 
 ---
 

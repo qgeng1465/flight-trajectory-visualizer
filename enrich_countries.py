@@ -1,250 +1,233 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Enrich airports.csv with country fields + rebuild countries.geojson with names.
+"""Rebuild airports.csv (airport + city + country) and countries.geojson.
 
-- Reads Natural Earth 110m admin_0 countries (with NAME / NAME_ZH / ISO_A2).
-- Point-in-polygon assigns each airport to a country (bbox-culled ray casting).
-- Writes airports.csv with extra columns: country, country_zh, iso.
-- Writes countries.geojson with stripped props {id, name, name_zh, iso_a2}
-  and coordinates rounded to 3 decimals (keeps the file ~half its former size).
+Sources — download once, keep them next to this script or in /tmp:
+
+  * OurAirports airports.csv  (authoritative IATA codes, coordinates, `municipality`
+    = the city, and `iso_country` = a *correct* ISO 3166-1 alpha-2 code)
+  * OurAirports countries.csv (ISO code -> English country name)
+  * Natural Earth 110m admin_0 countries  -> display geometry (small, bundled)
+  * Natural Earth 10m  admin_0 countries  -> geometry fallback for small islands
+
+    curl -o ourairports.csv           https://davidmegginson.github.io/ourairports-data/airports.csv
+    curl -o ourairports_countries.csv https://davidmegginson.github.io/ourairports-data/countries.csv
+
+Outputs:
+  * airports.csv       iata_code,name,latitude_deg,longitude_deg,type,country,country_zh,iso,city,city_alt
+  * countries.geojson  one feature per place that has a civil airport, props {id,name,name_zh,iso_a2}
+
+Why ISO_A2_EH and not ISO_A2
+-----------------------------
+Natural Earth stores ISO_A2='-99' for France, Norway and Kosovo — the real codes
+live in ISO_A2_EH (FR / NO / XK). Reading ISO_A2 (as this script used to) tagged
+all 112 French and 41 Norwegian airports as '-99', which collapsed them — together
+with every other '-99' place — into one fake country *and* made the globe
+highlight Kosovo (the only ISO_A2='-99' polygon in the 110m set, and it appears
+there five times) every time you flew to Paris. Everything is now keyed off
+ISO_A2_EH, with OurAirports' iso_country as the airport-side authority.
 """
 import csv
 import json
+import os
 
-NE = '/tmp/ne110m.geojson'   # bundled for rendering (small)
-NE10 = '/tmp/ne10m.geojson'  # build-time only, precise point-in-polygon (includes islands/coasts)
-AIRPORTS = 'airports.csv'
-OUT_CSV = 'airports.csv'
-OUT_GEOJSON = 'countries.geojson'
+HERE = os.path.dirname(os.path.abspath(__file__))
+OURAIRPORTS = os.environ.get('OURAIRPORTS_CSV', '/tmp/ourairports.csv')
+OURAIRPORTS_COUNTRIES = os.environ.get('OURAIRPORTS_COUNTRIES_CSV', '/tmp/ourairports_countries.csv')
+NE110M = os.environ.get('NE110M', '/tmp/ne110m.geojson')
+NE10M = os.environ.get('NE10M', '/tmp/ne10m.geojson')
+OUT_CSV = os.path.join(HERE, 'airports.csv')
+OUT_GEOJSON = os.path.join(HERE, 'countries.geojson')
 
-# Politically correct labels (applied to airports.csv, country meta and geojson props).
-# 香港 / 澳门 / 台湾 must always be shown as part of China.
+# Politically correct labels. 香港 / 澳门 / 台湾 are always shown as part of China.
 POLITICAL = {
     'HK': ['Hong Kong, China', '中国香港'],
     'MO': ['Macao, China', '中国澳门'],
     'CN-TW': ['Taiwan, China', '中国台湾'],
 }
-
-with open(NE) as f:
-    ne = json.load(f)
-with open(NE10) as f:
-    ne10 = json.load(f)
-
-# --- mapping source: 10m (precise) ---
-features = []
-for i, ft in enumerate(ne10['features']):
-    p = ft['properties']
-    features.append({
-        'name': p.get('NAME') or p.get('NAME_EN') or p.get('SOVEREIGNT') or '',
-        'name_zh': p.get('NAME_ZH') or '',
-        'iso': (p.get('ISO_A2') or '').strip() or '',
-        'geom': ft['geometry'],
-    })
-
-# --- display source: 110m (small, bundled) ---
-display_meta = {}
-for i, ft in enumerate(ne['features']):
-    p = ft['properties']
-    iso = (p.get('ISO_A2') or '').strip()
-    display_meta[iso] = {
-        'name': p.get('NAME') or p.get('NAME_EN') or p.get('SOVEREIGNT') or '',
-        'name_zh': p.get('NAME_ZH') or '',
-    }
-
-# Precompute bboxes
-bboxes = []
-for f in features:
-    minx = miny = float('inf')
-    maxx = maxy = float('-inf')
-    geom = f['geom']
-    polys = geom['coordinates'] if geom['type'] == 'MultiPolygon' else [geom['coordinates']]
-    for poly in polys:
-        for ring in poly:
-            for x, y in ring:
-                minx, maxx = min(minx, x), max(maxx, x)
-                miny, maxy = min(miny, y), max(maxy, y)
-    bboxes.append((minx, miny, maxx, maxy))
+# OurAirports / Natural Earth give Taiwan as TW; we key it as CN-TW throughout.
+ISO_ALIAS = {'TW': 'CN-TW'}
+# Natural Earth folds these into their parent country (France, Netherlands,
+# Australia), so they have no polygon of their own and no Chinese name. Without
+# this they would render as a bare ISO code in the country list.
+TERRITORY_ZH = {
+    'GF': '法属圭亚那', 'RE': '留尼汪', 'GP': '瓜德罗普', 'MQ': '马提尼克',
+    'YT': '马约特', 'BQ': '荷兰加勒比区', 'CC': '科科斯群岛', 'CX': '圣诞岛',
+}
+# Places that are not countries but do have civil airports; kept, but they should
+# never be counted as a "country" the user visited. (Handled app-side by name.)
+KEEP_TYPES = ('large_airport', 'medium_airport')
+# Small airfields are only worth shipping when they have commercial passenger
+# service — otherwise a real flight into a regional airport silently fails to
+# import ("no valid flights"). Adds ~760 rows, no airfields.
 
 
-def point_in_rings(x, y, polys):
-    inside = False
-    for poly in polys:
-        for ring in poly:
-            j = len(ring) - 1
-            for i in range(len(ring)):
-                xi, yi = ring[i]
-                xj, yj = ring[j]
-                if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
-                    inside = not inside
-                j = i
-    return inside
+def norm_iso(code):
+    code = (code or '').strip().upper()
+    if code in ('', '-99'):
+        return ''
+    return ISO_ALIAS.get(code, code)
 
 
-def locate(lon, lat):
-    for i, (minx, miny, maxx, maxy) in enumerate(bboxes):
-        if lat < miny or lat > maxy or lon < minx or lon > maxx:
-            continue
-        f = features[i]
-        geom = f['geom']
-        polys = geom['coordinates'] if geom['type'] == 'MultiPolygon' else [geom['coordinates']]
-        if point_in_rings(lon, lat, polys):
-            return i
-    return None
+def ne_iso(props):
+    """Natural Earth ISO code, preferring the 'EH' column that actually holds
+    France / Norway / Kosovo (ISO_A2 is '-99' for those)."""
+    return norm_iso(props.get('ISO_A2_EH')) or norm_iso(props.get('ISO_A2'))
 
 
-def _seg_dist(px, py, ax, ay, bx, by):
-    dx, dy = bx - ax, by - ay
-    if dx == 0 and dy == 0:
-        return ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
-    t = ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)
-    t = max(0.0, min(1.0, t))
-    cx, cy = ax + t * dx, ay + t * dy
-    return ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5
+def clean_city(muni):
+    """'Paris (Roissy-en-France, Val-d'Oise)' -> 'Paris'; keeps the tail separately."""
+    s = (muni or '').strip()
+    if not s:
+        return '', ''
+    head = s.split('(')[0].strip().rstrip(',').strip()
+    return (head or s), (s if s != (head or s) else '')
 
 
-def _dist_to_feature(lon, lat, f):
-    geom = f['geom']
-    polys = geom['coordinates'] if geom['type'] == 'MultiPolygon' else [geom['coordinates']]
-    best = float('inf')
-    for poly in polys:
-        for ring in poly:
-            j = len(ring) - 1
-            for i in range(len(ring)):
-                ax, ay = ring[i]
-                bx, by = ring[j]
-                d = _seg_dist(lon, lat, ax, ay, bx, by)
-                if d < best:
-                    best = d
-                j = i
-    return best
+def load_airports():
+    if not os.path.exists(OURAIRPORTS):
+        raise SystemExit(f'need OurAirports data at {OURAIRPORTS} (see docstring)')
+    out, seen = [], set()
+    with open(OURAIRPORTS, encoding='utf-8') as f:
+        for r in csv.DictReader(f):
+            if r['type'] not in KEEP_TYPES and not (
+                    r['type'] == 'small_airport' and r['scheduled_service'] == 'yes'):
+                continue
+            iata = (r['iata_code'] or '').strip().upper()
+            if len(iata) != 3 or iata in seen:
+                continue
+            if not r['latitude_deg'] or not r['longitude_deg']:
+                continue
+            seen.add(iata)
+            out.append(r)
+    return out
 
 
-NEAREST_KM = 100  # nearest-polygon fallback threshold for coastal / island airports
+def load_ne(path):
+    with open(path, encoding='utf-8') as f:
+        return json.load(f)
 
 
-def locate_nearest(lon, lat):
-    best = None
-    best_d = NEAREST_KM / 111.0  # approximate degrees
-    for i, (minx, miny, maxx, maxy) in enumerate(bboxes):
-        # cheap bbox rejection with padding
-        pad = best_d
-        if lat < miny - pad or lat > maxy + pad or lon < minx - pad or lon > maxx + pad:
-            continue
-        d = _dist_to_feature(lon, lat, features[i])
-        if d < best_d:
-            best_d = d
-            best = i
-    return best
-
-
-def rnd(c):
-    if isinstance(c[0], (int, float)):
-        return [round(c[0], 3), round(c[1], 3)]
-    return [rnd(x) for x in c]
+def load_country_names():
+    """iso -> English name, from OurAirports' own country table (covers the
+    territories Natural Earth folds into a parent country)."""
+    if not os.path.exists(OURAIRPORTS_COUNTRIES):
+        return {}
+    with open(OURAIRPORTS_COUNTRIES, encoding='utf-8') as f:
+        return {r['code'].strip().upper(): r['name'].strip() for r in csv.DictReader(f)}
 
 
 def main():
-    rows = list(csv.DictReader(open(AIRPORTS, encoding='utf-8')))
-    matched = 0
-    unmatched = []
-    for r in rows:
-        try:
-            lon, lat = float(r['longitude_deg']), float(r['latitude_deg'])
-        except (TypeError, ValueError):
-            r['country'] = r['country_zh'] = r['iso'] = ''
-            unmatched.append((r.get('iata_code'), 'no coords'))
-            continue
-        idx = locate(lon, lat) if locate(lon, lat) is not None else locate_nearest(lon, lat)
-        if idx is None:
-            r['country'] = r['country_zh'] = r['iso'] = ''
-            unmatched.append((r.get('iata_code'), r.get('name')))
-        else:
-            f = features[idx]
-            iso = f['iso'] or f['name'] or str(idx)
-            if iso in POLITICAL:
-                r['country'], r['country_zh'] = POLITICAL[iso]
-            else:
-                r['country'], r['country_zh'] = f['name'], f['name_zh']
-            r['iso'] = iso
-            matched += 1
+    airports = load_airports()
+    ne110 = load_ne(NE110M)
+    ne10 = load_ne(NE10M)
 
-    header = ['iata_code', 'name', 'latitude_deg', 'longitude_deg', 'type', 'country', 'country_zh', 'iso']
+    # iso -> [name, name_zh] from the precise display set, filled with 10m gaps.
+    name_by_iso = {}
+    for src in (ne10, ne110):
+        for ft in src['features']:
+            p = ft['properties']
+            iso = ne_iso(p)
+            if iso and iso not in name_by_iso:
+                name_by_iso[iso] = [
+                    p.get('NAME') or p.get('NAME_EN') or p.get('SOVEREIGNT') or '',
+                    p.get('NAME_ZH') or '',
+                ]
+
+    fallback_names = load_country_names()
+
+    def country_names(iso):
+        if iso in POLITICAL:
+            return POLITICAL[iso]
+        if iso in name_by_iso:
+            return name_by_iso[iso]
+        # No Natural Earth polygon of its own — use OurAirports' name + our zh table.
+        return [fallback_names.get(iso, iso), TERRITORY_ZH.get(iso, '')]
+
+    rows, unknown = [], []
+    for r in airports:
+        iso = norm_iso(r['iso_country'])
+        if not iso:
+            unknown.append(r['iata_code'])
+        city, city_alt = clean_city(r['municipality'])
+        country, country_zh = country_names(iso)
+        rows.append({
+            'iata_code': r['iata_code'].strip().upper(),
+            'name': r['name'].strip(),
+            'latitude_deg': r['latitude_deg'].strip(),
+            'longitude_deg': r['longitude_deg'].strip(),
+            'type': r['type'],
+            'country': country,
+            'country_zh': country_zh,
+            'iso': iso,
+            'city': city,
+            'city_alt': city_alt,
+            # OurAirports' own search keywords: local-language names, city codes
+            # people actually type ("TYO", "München", "東京"), former names.
+            'kw': (r.get('keywords') or '').strip(),
+        })
+
+    header = ['iata_code', 'name', 'latitude_deg', 'longitude_deg', 'type',
+              'country', 'country_zh', 'iso', 'city', 'city_alt', 'kw']
     with open(OUT_CSV, 'w', encoding='utf-8', newline='') as f:
         w = csv.DictWriter(f, fieldnames=header)
         w.writeheader()
         w.writerows(rows)
 
-    # Only keep display features for places that actually have (civil) airports in
-    # airports.csv — no civilian airport => not shown on the globe / not a "country".
-    used_iso = {r['iso'] for r in rows if r.get('iso')}
+    # ---- countries.geojson: only places that actually have a civil airport ----
+    used_iso = {r['iso'] for r in rows if r['iso']}
 
-    # Build an iso -> (name, name_zh) lookup from the 110m display set, then fill any
-    # gaps from the precise 10m set. (Do NOT capture the loop variable `ft` in a
-    # closure — it ends up pointing at the last feature.)
-    name_by_iso = {}
-    for _ft in ne['features']:
-        _p = _ft['properties']
-        _iso = (_p.get('ISO_A2') or '').strip()
-        if _iso:
-            name_by_iso[_iso] = [
-                _p.get('NAME') or _p.get('NAME_EN') or _p.get('SOVEREIGNT') or '',
-                _p.get('NAME_ZH') or '',
-            ]
-    for _ft in ne10['features']:
-        _p = _ft['properties']
-        _iso = (_p.get('ISO_A2') or '').strip()
-        if _iso and _iso not in name_by_iso:
-            name_by_iso[_iso] = [
-                _p.get('NAME') or _p.get('NAME_EN') or _p.get('SOVEREIGNT') or '',
-                _p.get('NAME_ZH') or '',
-            ]
+    def rnd(c):
+        if isinstance(c[0], (int, float)):
+            return [round(c[0], 3), round(c[1], 3)]
+        return [rnd(x) for x in c]
 
-    def _names(iso_a2):
-        if iso_a2 in POLITICAL:
-            return POLITICAL[iso_a2]
-        return name_by_iso.get(iso_a2, [iso_a2, ''])
-
-    # Some airport-bearing places (e.g. Hong Kong / Macau / Taiwan, and small
-    # islands like Singapore that are too small for the 110m set) are missing from
-    # the 110m display set as separate polygons — pull them from the precise 10m set.
     ten_m = {}
     for ft in ne10['features']:
-        p = ft['properties']
-        iso = (p.get('ISO_A2') or '').strip()
+        iso = ne_iso(ft['properties'])
         if iso:
             ten_m.setdefault(iso, ft['geometry'])
 
-    out_features = []
-    used_ids = set()
-    for i, ft in enumerate(ne['features']):
-        iso_a2 = (ft['properties'].get('ISO_A2') or '').strip()
-        if iso_a2 not in used_iso:
-            continue
-        nm = _names(iso_a2)
-        used_ids.add(iso_a2)
+    out_features, used_ids = [], set()
+    for i, ft in enumerate(ne110['features']):
+        iso = ne_iso(ft['properties'])
+        if iso not in used_iso or iso in used_ids:
+            continue          # Kosovo appears 5x in the 110m set — keep one
+        used_ids.add(iso)
+        nm = country_names(iso)
         out_features.append({
             'type': 'Feature',
-            'properties': {'id': i, 'name': nm[0], 'name_zh': nm[1], 'iso_a2': iso_a2},
+            'properties': {'id': i, 'name': nm[0], 'name_zh': nm[1], 'iso_a2': iso},
             'geometry': ft['geometry'],
         })
-    for iso_a2 in sorted(used_iso - used_ids):
-        if iso_a2 in ten_m:
-            nm = _names(iso_a2)
-            _g = dict(ten_m[iso_a2])
-            _g['coordinates'] = rnd(_g['coordinates'])
-            out_features.append({
-                'type': 'Feature',
-                'properties': {'id': 9000 + len(out_features), 'name': nm[0], 'name_zh': nm[1], 'iso_a2': iso_a2},
-                'geometry': _g,
-            })
-    out = {'type': 'FeatureCollection', 'features': out_features}
-    print(f'display geojson keeps {len(out_features)}/{len(ne["features"])} features (only places with airports)')
-    with open(OUT_GEOJSON, 'w', encoding='utf-8') as f:
-        json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
+    # Small places with no 110m polygon (Singapore, Hong Kong, …) come from 10m.
+    for iso in sorted(used_iso - used_ids):
+        if iso not in ten_m:
+            continue
+        g = dict(ten_m[iso])
+        g['coordinates'] = rnd(g['coordinates'])
+        nm = country_names(iso)
+        out_features.append({
+            'type': 'Feature',
+            'properties': {'id': 9000 + len(out_features), 'name': nm[0],
+                           'name_zh': nm[1], 'iso_a2': iso},
+            'geometry': g,
+        })
 
-    print(f'total={len(rows)} matched={matched} unmatched={len(unmatched)}')
-    for code, name in unmatched[:30]:
-        print('  unmatched:', code, '|', name)
+    with open(OUT_GEOJSON, 'w', encoding='utf-8') as f:
+        json.dump({'type': 'FeatureCollection', 'features': out_features}, f,
+                  ensure_ascii=False, separators=(',', ':'))
+
+    missing = sorted(used_iso - {x['properties']['iso_a2'] for x in out_features})
+    print(f'airports: {len(rows)}  (unknown iso: {len(unknown)} {unknown[:10]})')
+    print(f'geojson : {len(out_features)} features for {len(used_iso)} iso codes')
+    print(f'cities  : {sum(1 for r in rows if r["city"])}/{len(rows)} have a city name')
+    if missing:
+        print(f'no polygon (will never highlight): {missing[:20]}')
+    for probe in ('FR', 'NO', 'XK', 'CN-TW', 'HK', 'MO', 'SG'):
+        n = sum(1 for r in rows if r['iso'] == probe)
+        has = any(x['properties']['iso_a2'] == probe for x in out_features)
+        print(f'  {probe:6s} airports={n:4d} polygon={"yes" if has else "NO"}')
 
 
 if __name__ == '__main__':
