@@ -17,7 +17,7 @@
 
 ![Flight Footprints — demo](demo.gif)
 
-> **▶ Full demo video (20 s):** [`demo.webm`](demo.webm) — importing a log, the animated aircraft, trip replay and the new ranked airport search, recorded from the live app.
+> **▶ Full demo video (36 s):** [`demo.webm`](demo.webm) — importing a log, the animated aircraft, trip replay and the ranked airport search, recorded from the live app. The GIF above is the same clip sped up to fit under 6 MB.
 
 <details>
 <summary>📸 更多截图 / More screenshots</summary>
@@ -75,7 +75,8 @@ Your data never leaves your device. Imported flights are saved in the browser's 
 * **📅 Year View:** Filter by year and read one line — *My 2025 — N flights · X km · Y countries*.
 * **📤 Share Card:** One click renders a 1080×1350 share image (your footprint globe + total distance + countries + airlines) to post on WeChat Moments / Xiaohongshu.
 * **⚡ Lite Mode:** For weak laptops — hides the glow, the plane animation, animated arcs and country borders, keeping just cities + routes for smooth sailing; auto-enables on low-core / low-memory devices.
-* **🛫 Animated Aircraft:** Click any flight and a little ✈ aircraft takes off from the origin and flies along the great-circle route to the destination — looping while the route stays selected.
+* **🛫 Animated Aircraft:** Click any flight and a little ✈ aircraft takes off from the origin and flies the route to the destination — looping while the route stays selected.
+* **🛬 Altitude Profiles:** Routes are drawn as climb–cruise–descent profiles rather than flat hoops — both ends come down to the surface, the climb/descent are given 18 and 24 minutes, and the cruise height scales with the great-circle distance, so a short hop and a long-haul arch to visibly different heights. The aircraft flies that same profile, not a fixed height above the globe.
 * **🎯 Route Highlight & Focus:** Click any flight to highlight its arc in gold, dim the rest, and smoothly fly the camera to frame that route. A detail card shows the airline, full airport names, date, duration and distance.
 * **▶ Trip Replay:** Play your flights back chronologically as an animated timeline — the globe follows each leg with a flowing "aircraft" dash animation.
 * **💾 Local-Only Persistence (localStorage):** Flights are saved in your browser and **auto-restored on your next visit** — a refresh never loses your log. New imports are **merged and de-duplicated** into the existing log (add as many CSVs as you like — overlapping rows are skipped and reported); **✕ Clear Data** (double-confirmed) wipes it for good. **Nothing is ever uploaded.**
@@ -216,7 +217,8 @@ Actively developed. Contributions and feedback are welcome!
 * **📅 年度视图：** 按年份筛选，一行看清「我的 2025 —— N 次飞行 · X km · Y 个国家」。
 * **📤 分享足迹卡：** 一键生成 1080×1350 分享图片（足迹地球 + 总里程 + 国家数 + 航司数），保存后可直接发朋友圈 / 小红书。
 * **⚡ 精简模式：** 弱笔记本福音——隐藏光晕、小飞机动画、动态航线与国界，只保留城市与航线，丝般顺滑；低配设备自动开启。
-* **🛫 动态小飞机：** 点击任一航班，一架 ✈ 小飞机从出发地起飞，沿大圆航线飞往目的地，在选中期间持续往返飞行。
+* **🛫 动态小飞机：** 点击任一航班，一架 ✈ 小飞机从出发地起飞，沿航线飞往目的地，在选中期间持续往返飞行。
+* **🛬 高度剖面航线：** 航线按「爬升—巡航—下降」绘制，而不是等高的弧：起降两端落回地面，爬升/下降各按 18 / 24 分钟展开，巡航高度随大圆距离缩放——短程与长程的拱高一眼可辨。小飞机沿同一条剖面飞行，不再是贴着地球的固定高度。
 * **🎯 航线高亮与聚焦：** 点击任一航班，该航线金黄高亮、其余变暗，镜头平滑飞过去框住整条航线；详情卡展示航司、机场全称、日期、时长与里程。
 * **▶ 行程回放：** 按时间顺序把航班逐条回放成动画时间线，地球跟随每一程，带流动的「飞机划过」虚线效果。
 * **💾 纯本地持久化（localStorage）：** 航班保存在浏览器里，**下次打开自动恢复，刷新不丢数据**。导入新 CSV 会**并入并去重**到现有记录（可反复导入，重复行自动跳过并提示）；「✕ 清除数据」（带二次确认）彻底清空。**绝不上传任何数据。**
