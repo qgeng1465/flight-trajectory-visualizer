@@ -15,33 +15,31 @@
 
 ---
 
-![Flight Footprints — demo](demo.gif)
+[![▶ 播放演示视频 · Play the demo video](demo-poster.jpg)](https://qgeng1465.github.io/flight-trajectory-visualizer/demo.html)
 
-> **▶ Full demo video (36 s):** [`demo.webm`](demo.webm) — importing a log, the animated aircraft, trip replay and the ranked airport search, recorded from the live app. The GIF above is the same clip sped up to fit under 6 MB.
-
-<details>
-<summary>📸 更多截图 / More screenshots</summary>
-
-**Footprints on the globe · 全球足迹**
-![Flight Footprints - imported flights](screenshot.png)
-
-**Flight list, statistics and airline filter · 航班清单与统计**
-![Flight Footprints - flight list](screenshot-data.png)
-
-**Route focus with the animated aircraft · 航线聚焦**
-![Flight Footprints - route focus](screenshot-detail.png)
-
-**A friend's share link, offered before it touches your log · 收到分享链接**
-![Flight Footprints - a shared flight log](screenshot-share.png)
-
-**Export and share controls · 导出与分享按钮**
-![Flight Footprints - export and share controls](screenshot-export.png)
-
-</details>
+> **▶ 演示视频 · Demo video (35 s):** [**在浏览器里播放 · Play it in your browser →**](https://qgeng1465.github.io/flight-trajectory-visualizer/demo.html) — MP4（2.8 MB）+ WebM（3.3 MB），1280×760，点封面图同样可以打开。收录了导入日志、飞机沿高度剖面飞行、行程回放，以及按评分排序的机场搜索。
+>
+> Importing a log, the animated aircraft, trip replay and the ranked airport search — recorded from the live app. The link above opens a page with a real player; the files themselves are [`demo.mp4`](demo.mp4) and [`demo.webm`](demo.webm).
 
 ---
 
 <a id="english"></a>
+
+### 📸 Screenshots
+
+Every shot below is the real app, captured from the shipped build.
+
+| Footprints on the globe | Statistics and the ranked flight list |
+|:---:|:---:|
+| ![Imported flights drawn on the globe](screenshot-en.png) | ![Statistics and flight list](screenshot-en-data.png) |
+
+| Route focus — the aircraft rides its altitude profile | Airport filter — everything out of one hub |
+|:---:|:---:|
+| ![Route focus with the animated aircraft](screenshot-en-detail.png) | ![Airport filter](screenshot-en-airport.png) |
+
+**The flattened 2D map** — the same log unrolled onto a flat projection, pannable and zoomable. Shown with the airport labels switched off (*arcs only*), which is what makes the route mesh readable at world zoom.
+
+![The 2D map view](screenshot-en-2d.png)
 
 ## 📖 Overview
 
@@ -187,6 +185,28 @@ Actively developed. Contributions and feedback are welcome!
 
 一个 **100% 本地、隐私优先** 的个人飞行轨迹记录器 —— 类似常用出行 App 里的「飞行足迹」，但所有轨迹都由你从本地 CSV 导入，并且**只保存在你自己的浏览器里**。无服务器、不上传、无需账号。
 
+### 📸 界面截图
+
+下面每一张都是应用的真实截图，取自当前发布的版本。
+
+| 全球足迹 | 航班清单与统计 |
+|:---:|:---:|
+| ![导入后的全球足迹](screenshot.png) | ![航班清单与统计](screenshot-data.png) |
+
+| 航线聚焦 —— 小飞机沿高度剖面飞行 | 机场筛选 —— 某个枢纽的全部出发航班 |
+|:---:|:---:|
+| ![航线聚焦](screenshot-detail.png) | ![机场筛选](screenshot-airport.png) |
+
+| 2D 展开图（仅显示航线） | 导出与分享按钮 |
+|:---:|:---:|
+| ![2D 展开图](screenshot-2d.png) | ![导出与分享按钮](screenshot-export.png) |
+
+> 2D 图关掉了机场标签（图层控制选「仅显示航线」）—— 全球视角下标签会叠成一团，关掉之后航线网络才看得清。
+
+**收到别人分享的链接时** —— 在你确认之前，不会碰到你自己的记录。
+
+![收到分享链接](screenshot-share.png)
+
 ## 📖 项目简介
 
 **[![技术栈](https://img.shields.io/badge/技术栈-WebGl-blue)](https://github.com/qgeng1465/flight-trajectory-visualizer)
@@ -209,10 +229,6 @@ Actively developed. Contributions and feedback are welcome!
 就这些 —— 无需 npm install，无需构建，无需后端。只是你和你的飞行数据，在本机运行。
 
 > **⚠️ 不要直接双击 `index.html`。** 浏览器不允许 `file://` 打开的页面读取 `airports.csv`，搜索和示例数据都会失效。应用会检测到这种情况并给出提示，但正确的做法就是起一个本地服务。该服务只监听 `127.0.0.1`，你的飞行记录不会被暴露到网络上。
-
-**飞行足迹** 把你的个人飞行历史变成一颗精美的交互式 3D 地球。导入一份简单的航班 CSV（航班号、出发地、目的地、时间），即可获得一份电影感的飞行记录簿：按时间排列的航班清单、实时统计、**航空公司识别**、航线高亮动画，以及一个会**沿着选中航线飞行的小飞机** —— 全部渲染在 WebGL 地球上。
-
-你的数据绝不离开本机。导入的航班保存在浏览器 `localStorage`，**刷新或重新打开页面都会自动恢复上次的记录**；导入新 CSV 会**并入**已有记录并**自动去重**（航班号、航线、时间都相同即视为同一条），可以分多次导入；想整份替换，先点「✕ 清除数据」再导入即可。
 
 ## ✨ 核心功能
 
