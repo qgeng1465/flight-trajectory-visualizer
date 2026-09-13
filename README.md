@@ -127,7 +127,9 @@ The optional **weight** column stands for "this route was flown N times" (e.g. a
 | `Destination` / `DestinationAirport` / `ArrivalAirport` | dest (IATA) |
 | `FlightNumber` | flight number |
 
-The header names above are matched case-insensitively. Anything else can simply be renamed to the app's accepted names. Only **IATA airport codes** are matched (e.g. `PVG`, `SHE`) — if your export contains airport *names* instead of codes, swap in a code column.
+Header matching is **scored, not exact**, and case-insensitive: `OriginAirport` counts the same as `origin`, `DepartureDate` is taken as the date even when the file also carries a `DepartureTime`, and a lone `Departure` column is never mistaken for an airport. Columns the names don't settle are then recovered from their *values* — a column of IATA codes that exist in the bundled airport database, of ISO-style timestamps, or of flight numbers. That is what makes an export with headers we've never seen import unchanged: another tool's naming (`c1`, `c2`, `c3`), a non-English column set (`Sortie`, `Arrivee`, `Vol`, `Quand`), or a header pair that looks ambiguous. Those five awkward header sets — plus the bundled `sample.csv` — are in [`tests/fixtures/`](tests/fixtures/); each is two flights between PVG/SHE and PEK/CAN, so you can drop any of them into the app and watch it resolve.
+
+Only **IATA airport codes** are matched (e.g. `PVG`, `SHE`) — if your export contains airport *names* instead of codes, swap in a code column.
 
 ## 🛠️ Getting Started
 
@@ -266,7 +268,9 @@ Actively developed. Contributions and feedback are welcome!
 | `Destination` / `DestinationAirport` / `ArrivalAirport` | 目的地 (IATA) |
 | `FlightNumber` | 航班号 |
 
-以上表头名不区分大小写、直接识别；其它名字只需改回应用支持的列名即可。应用只按 **IATA 机场代码**匹配（如 `PVG`、`SHE`）——如果导出的是机场*名称*，请替换为代码列。
+表头匹配是**打分制、不是精确比对**，且不区分大小写：`OriginAirport` 与 `origin` 同分，`DepartureDate` 在有 `DepartureTime` 的文件里仍被认作日期，单写一个 `Departure` 也不会被误当成机场。名字定不下来的列，再按**列里的值**兜底识别——一列真实存在于内置机场库的 IATA 代码、一列 ISO 风格的时间戳、或一列航班号。正因如此，从没见过的表头也能原样导入：别的工具的命名（`c1`、`c2`、`c3`）、非英文列名（`Sortie`、`Arrivee`、`Vol`、`Quand`）、看起来有歧义的列名组合。这五种表头（外加内置 `sample.csv`）都放在 [`tests/fixtures/`](tests/fixtures/) 里，每份都是 PVG/SHE 与 PEK/CAN 两趟航班，直接拖进应用即可看到识别结果。
+
+应用只按 **IATA 机场代码**匹配（如 `PVG`、`SHE`）——如果导出的是机场*名称*，请替换为代码列。
 
 ## 🛠️ 如何运行
 
