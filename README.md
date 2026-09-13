@@ -34,6 +34,9 @@
 **A friend's share link, offered before it touches your log · 收到分享链接**
 ![Flight Footprints - a shared flight log](screenshot-share.png)
 
+**Export and share controls · 导出与分享按钮**
+![Flight Footprints - export and share controls](screenshot-export.png)
+
 </details>
 
 ---
