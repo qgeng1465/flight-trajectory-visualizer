@@ -15,12 +15,20 @@
 
 ---
 
-![Flight Footprints](screenshot.png)
+![Flight Footprints — demo](demo.gif)
+
+> **▶ Full demo video (20 s):** [`demo.webm`](demo.webm) — importing a log, the animated aircraft, trip replay and the new ranked airport search, recorded from the live app.
 
 <details>
 <summary>📸 更多截图 / More screenshots</summary>
 
-![Flight Footprints - imported flights](screenshot-data.png)
+**Footprints on the globe · 全球足迹**
+![Flight Footprints - imported flights](screenshot.png)
+
+**Flight list, statistics and airline filter · 航班清单与统计**
+![Flight Footprints - flight list](screenshot-data.png)
+
+**Route focus with the animated aircraft · 航线聚焦**
 ![Flight Footprints - route focus](screenshot-detail.png)
 
 </details>
