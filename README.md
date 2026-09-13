@@ -17,7 +17,7 @@
 
 [![▶ Play the demo video](demo-poster.jpg)](https://qgeng1465.github.io/flight-trajectory-visualizer/demo.html)
 
-> **▶ Demo video (35 s):** [**Play it in your browser →**](https://qgeng1465.github.io/flight-trajectory-visualizer/demo.html) — MP4 (2.8 MB) + WebM (3.3 MB), 1280×760; clicking the cover image opens it too. It shows importing a log, the aircraft riding its altitude profile, trip replay and the ranked airport search. The files themselves are [`demo.mp4`](demo.mp4) and [`demo.webm`](demo.webm); the link above opens a page with a real player.
+> **▶ Demo video (36 s):** [**Play it in your browser →**](https://qgeng1465.github.io/flight-trajectory-visualizer/demo.html) — MP4 (2.9 MB) + WebM (3.9 MB), 1280×760; clicking the cover image opens it too. It shows importing a log, the aircraft riding its altitude profile, trip replay and the ranked airport search. The files themselves are [`demo.mp4`](demo.mp4) and [`demo.webm`](demo.webm); the link above opens a page with a real player.
 
 ---
 
@@ -74,19 +74,20 @@ That's it — no npm install, no build, no backend. Just you and your flight dat
 * **📤 Share Card:** One click renders a 1080×1350 share image (your footprint globe + total distance + countries + airlines) to post on WeChat Moments / Xiaohongshu.
 * **🎬 Export a Video:** **🎬 Export video** records the globe — a 14-second turn across your footprint, ending zoomed in on the routes — and downloads it as a `.webm` (or `.mp4` in Safari). Compositing happens in the browser: no upload, no server, no ffmpeg to install. It uses `MediaRecorder` over `canvas.captureStream()` rather than WebCodecs, because a WebCodecs frame needs a container muxer and this app ships as one HTML file with no build step and no bundled dependencies; the trade is that recording runs in real time. Only the globe is captured, so the control panel and the FPS meter stay out of the shot. [Here is a file this button produced →](demo-video-export.webm) (1.1 MB, 14 s, 1400×880). One caveat, stated plainly: the WebM that Chromium writes carries no duration in its header, so some players show a scrub bar that will not seek until the file is remuxed (`ffmpeg -i in.webm -c copy out.webm`) — playback is unaffected.
 * **🔗 Share Link:** **🔗 Share link** compresses your whole log into the URL fragment and copies it, so a friend opening it gets your actual footprints — not a picture. The payload rides after the `#`, which browsers never send in an HTTP request, so the page host sees nothing; the data goes only to whoever you hand the link to. They get an offer banner ("65 flights · 105,235 km · 6 countries") with **merge into my log** or **dismiss** — opening a link never silently overwrites their own data. A 38-row log is a ~1,000-character link.
-* **⚡ Lite Mode:** For weak laptops — hides the glow, the plane animation, animated arcs and country borders, keeping just cities + routes for smooth sailing; auto-enables on low-core / low-memory devices.
+* **⚡ Lite Mode:** For weak laptops — hides the glow layer, the aircraft animation and the country borders, keeping just cities and routes for smooth sailing; auto-enables on low-core / low-memory devices.
 * **🛫 Animated Aircraft:** Click any flight and a little ✈ aircraft takes off from the origin and flies the route to the destination — looping while the route stays selected.
 * **🛬 Altitude Profiles:** Routes are drawn as climb–cruise–descent profiles rather than flat hoops — both ends come down to the surface, the climb/descent are given 18 and 24 minutes, and the cruise height scales with the great-circle distance, so a short hop and a long-haul arch to visibly different heights. The aircraft flies that same profile, not a fixed height above the globe.
 * **🎯 Route Highlight & Focus:** Click any flight to highlight its arc in gold, dim the rest, and smoothly fly the camera to frame that route. A detail card shows the airline, full airport names, date, duration and distance.
 * **▶ Trip Replay:** Play your flights back chronologically as an animated timeline — the globe follows each leg with a flowing "aircraft" dash animation.
 * **💾 Local-Only Persistence (localStorage):** Flights are saved in your browser and **auto-restored on your next visit** — a refresh never loses your log. New imports are **merged and de-duplicated** into the existing log (add as many CSVs as you like — overlapping rows are skipped and reported); **✕ Clear Data** (double-confirmed) wipes it for good. **Nothing is ever uploaded.**
-* **🌍 Fully Offline Globe:** All libraries are vendored locally and Earth textures + 10m-resolution TopoJSON province boundaries ship with the repo. No map API keys, no network tiles, works without internet.
-* **🔍 Semantic Zoom (LOD):** Airport labels and province borders fade in/out based on camera altitude.
+* **🌍 Fully Offline Globe:** All libraries are vendored locally and the Earth textures and country boundaries (`countries.geojson`, 227 country/territory polygons) ship with the repo. No map API keys, no network tiles, works without internet.
+* **🇨🇳 China Map Compliance:** Chinese territory is not drawn from Natural Earth's de-facto boundaries. It uses geometry that follows the **2023 standard map**: all 34 province-level units (including **台湾省 / Taiwan, 香港特别行政区 / Hong Kong and 澳门特别行政区 / Macao**) plus the **十段线 (ten-dash line)**. 藏南 / South Tibet resolves to China (Natural Earth drew it inside Bhutan), 钓鱼岛 / the Diaoyu Islands to China, and the South China Sea islands fall inside the dash-line area. All four are also tinted as one: when any part of China is visited, the mainland, Taiwan, Hong Kong and Macao glow together, so the map never colours one province differently from the rest of the country. The repo ships `check_map_compliance.py`, which verifies each of these point by point and exits 0 only if they all hold.
+* **🔍 Semantic Zoom (LOD):** Airport labels and country borders fade in/out based on camera altitude.
 * **🔎 Smart Airport Search:** Type an IATA code, an English name, a **city** (New York, Paris, Sydney…), a local-language keyword (München, 東京) or a Chinese name (上海, 北京, 纽约…). Results are **ranked by relevance** (exact code → code prefix → exact city → city/name prefix → keyword), matched text is **highlighted**, cities are shown next to each airport, and **↑ / ↓ / Enter / Esc** drive the list without touching the mouse.
 * **🛫 Airport Route Filter:** Select any airport to display only flights departing from it, or only flights arriving at it.
 * **🛠️ Classic Console:** 3D globe ⇄ 2D map projection (great-circle arcs), layer toggles, Earth auto-rotation, airport search, and high-res snapshot export (JPG).
 * **⚡ Load Sample / 💾 Export CSV:** One click loads the bundled `sample.csv` to try it out, or exports your current log back to CSV as a backup.
-* **⚖️ Weighted Routes:** A `weight`/`count`/`freq` column (e.g. from `compress_flights.py`) makes one row count as many flights — stats, arc thickness, replay and the CSV export all respect it.
+* **⚖️ Weighted Routes:** A `weight`/`count`/`freq` column (e.g. from `compress_flights.py`) makes one row count as many flights — the statistics, the arc thickness and the CSV export all respect it. (The trip replay still walks the file row by row: a weight-N row plays as one leg, not N.)
 * **🏷️ Airline Filter & Weight Sort:** Filter flights by airline (flight list + globe arcs update together, matching arcs turn violet), sort by flight count, and click the **Busiest route** stat to jump straight to that flight.
 * **📥 Drag & Drop Import:** Drop any flight CSV straight onto the page to import it — no need to open the file picker.
 * **📱 Installable PWA (offline-ready):** Add to home screen; core assets are cached locally so the globe still works with no network.
@@ -106,7 +107,7 @@ Minimum columns (header names are flexible & case-insensitive):
 | Timezone (optional) | `tz`, `timezone`, `time_zone` | `Asia/Shanghai` or `+08:00` |
 | Flight count (weight) | `weight`, `count`, `freq` | `3` |
 
-The optional **weight** column stands for "this route was flown N times" (e.g. a CSV produced by `compress_flights.py`). When present, statistics, arc thickness, the export and the trip replay all count weighted totals, so one row can represent many identical flights. Rows with a missing airport code or `origin == dest` are skipped automatically. See `sample.csv` for a working example — it bundles a few `weight > 1` demo routes plus a few international legs (Shanghai→Sydney, Beijing→Tokyo Haneda, Shanghai→Hong Kong), so you can see thicker arcs, hot-colored heavy routes and `×N` badges instantly (hit **⚡ Load Sample**).
+The optional **weight** column stands for "this route was flown N times" (e.g. a CSV produced by `compress_flights.py`). When present, the statistics, the arc thickness and the CSV export count weighted totals, so one row can represent many identical flights (the trip replay plays each row once). Rows with a missing airport code or `origin == dest` are skipped automatically. See `sample.csv` for a working example — it bundles a few `weight > 1` demo routes plus a few international legs (Shanghai→Sydney, Beijing→Tokyo Haneda, Shanghai→Hong Kong), so you can see thicker arcs, hot-colored heavy routes and `×N` badges instantly (hit **⚡ Load Sample**).
 
 ### 🗺️ Importing from MyFlightradar24 / TripIt
 
@@ -140,9 +141,11 @@ Only **IATA airport codes** are matched (e.g. `PVG`, `SHE`) — if your export c
 
 ## ⚙️ Optional Data Tools
 
-* `enrich_countries.py` — the rebuild that produces the **bundled** data: joins OurAirports `airports.csv` + `countries.csv` onto Natural Earth 110m/10m geometry, emitting `airports.csv` (IATA, name, coordinates, type, English + Chinese country name, ISO, city, search keywords) and `countries.geojson`. It keeps large & medium airports **plus small airports that have scheduled passenger service**, and reads Natural Earth's `ISO_A2_EH` column so France / Norway / Kosovo get their real codes instead of `-99`.
+* `enrich_countries.py` — the rebuild that produces the **bundled** data: joins OurAirports `airports.csv` + `countries.csv` onto Natural Earth 110m/10m geometry, emitting `airports.csv` (IATA, name, coordinates, type, English + Chinese country name, ISO, city, search keywords) and `countries.geojson`. It keeps large & medium airports **plus small airports that have scheduled passenger service**, and reads Natural Earth's `ISO_A2_EH` column so France / Norway / Kosovo get their real codes instead of `-99`. **China is the exception**: the CN / CN-TW / HK / MO features take their geometry from Aliyun DataV's 2023 standard-map data (see `check_map_compliance.py`), and that territory is then **erased from 14 neighbouring polygons** — Bhutan, India, Russia and the rest — so the same ground is never drawn as two countries. Natural Earth had 藏南 inside Bhutan.
+* `check_map_compliance.py` — verifies, point by point, that Chinese territory is drawn correctly: 藏南 and Aksai Chin as China, Taipei as Taiwan, the Diaoyu Islands as China, Hong Kong and Macao each distinct and not overlapping the mainland, a dash line of at least ten segments whose area contains the Paracel and Spratly islands, and all five China-side features geometrically valid. Standard library only (with shapely it also checks geometry validity). Exits 0 if everything holds, 1 otherwise.
 * `optimize_airports.py` — minimal IATA-only rebuild of `airports.csv` from a raw OurAirports dump.
 * `compress_flights.py` — aggregate a huge raw trajectory CSV into weighted routes, keeping a representative flight number & time (the most recent flight per route) so the compressed CSV still loads with full details; the app honors the `weight` column it produces.
+* `tests/verify_readme_claims.py` — drives the shipped app in a headless browser and checks the promises in this README that are easy to state and awkward to prove: that the snapshot buttons really write a JPEG, that a `tz` column really moves the displayed clock, that the share card really is 1080×1350, that a `weight` column really drives the statistics, and what lite mode really turns off. Needs `playwright`; exits 0 only if every claim holds — `python3 tests/verify_readme_claims.py http://127.0.0.1:8000/index.html`.
 
 ## 🔒 Privacy
 
@@ -167,7 +170,7 @@ This project is written in vanilla JS with zero dependencies beyond the vendored
 
 Actively developed. Contributions and feedback are welcome!
 
-> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v17`) — otherwise installed-PWA users keep serving the old cached app.
+> **Dev note:** whenever you ship an update, bump the version in `sw.js` (currently `flight-footprints-v19`) — otherwise installed-PWA users keep serving the old cached app.
 
 ---
 
